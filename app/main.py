@@ -8,6 +8,8 @@ from fastapi.responses import FileResponse
 
 from app.routes.brain import router as brain_router
 from app.routes.conversations import router as conversations_router
+from app.routes.tools import router as tools_router
+from app.routes.system import router as system_router
 from config.logging import setup_logging
 from config.settings import settings
 
@@ -40,6 +42,8 @@ app.add_middleware(
 
 app.include_router(brain_router)
 app.include_router(conversations_router)
+app.include_router(tools_router)
+app.include_router(system_router)
 
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"

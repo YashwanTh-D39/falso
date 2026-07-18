@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:3b"
+    system_prompt_path: str = "./config/system_prompt.txt"
 
     # Voice
     stt_model: str = "base"
@@ -27,6 +28,9 @@ class Settings(BaseSettings):
     # Memory
     chroma_persist_dir: str = "./data/chroma"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+
+    # File Tool
+    file_tool_workspace: str = ""
 
     # Vision
     tesseract_cmd: str = "tesseract"
