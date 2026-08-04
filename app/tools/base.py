@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
 import logging
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
     from app.services.context import ConversationContext
@@ -24,7 +23,7 @@ class ToolResult:
 class Tool(ABC):
     name: str = ""
     description: str = ""
-    parameters: dict = field(default_factory=dict)
+    parameters: ClassVar[dict] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -35,9 +34,7 @@ class Tool(ABC):
     def match_prompt(cls, prompt: str, context: ConversationContext | None = None) -> dict | None:
         prompt_lower = prompt.lower()
 
-        if re.search(r'\b' + re.escape(cls.name.lower()) + r'\b', prompt_lower):
-            pass
-        else:
+        if not re.search(r'\b' + re.escape(cls.name.lower()) + r'\b', prompt_lower):
             desc_lower = cls.description.lower()
             tokens = re.findall(r'[a-z]+', desc_lower)
             stop_words = {
@@ -54,47 +51,7 @@ class Tool(ABC):
             if not any(re.search(r'\b' + re.escape(kw) + r'\b', prompt_lower) for kw in keywords):
                 return None
 
-        kwargs: dict = {}
-        params = cls.parameters or {}
-        props = params.get("properties", {})
-        if not props:
-            return kwargs
-
-        if "command" in props:
-            enum_vals = props["command"].get("enum", [])
-            aliases = {"create": "write", "make": "write", "new": "write"}
-            for word in re.findall(r'[a-zA-Z]+', prompt):
-                w = word.lower()
-                if w in aliases:
-                    kwargs["command"] = aliases[w]
-                    break
-                if w in enum_vals:
-                    kwargs["command"] = w
-                    break
-            if "command" not in kwargs:
-                for cmd in enum_vals:
-                    if cmd in prompt_lower:
-                        kwargs["command"] = cmd
-                        break
-
-        if "path" in props and "command" in kwargs:
-            cmd = kwargs["command"]
-            rev = {v: k for k, v in {"create": "write", "make": "write", "new": "write"}.items() if v == cmd}
-            triggers = {cmd} | set(rev.keys())
-            words = prompt.split()
-            for i, w in enumerate(words):
-                if w.lower().strip(".,!?;:'\"") in triggers:
-                    for j in range(i + 1, len(words)):
-                        candidate = words[j].strip(".,!?;:'\"")
-                        if candidate:
-                            kwargs["path"] = candidate
-                            break
-                    break
-
-        if "content" in props and "command" in kwargs and kwargs["command"] == "write" and "content" not in kwargs:
-            kwargs["content"] = ""
-
-        return kwargs
+        return {}
 
     @classmethod
     def format_result(cls, result: ToolResult) -> str:

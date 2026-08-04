@@ -512,18 +512,9 @@
   .hand-indicator.active .dot{
     background:var(--ember); box-shadow:0 0 8px var(--ember-dim);
   }
-  .gesture-label{
-    font-family:var(--f-mono); font-size:10px; letter-spacing:0.14em;
-    text-transform:uppercase; margin-top:2px; height:16px;
-    color:rgba(245,237,230,0.15); text-align:center;
-    transition:color 0.15s ease, text-shadow 0.15s ease;
-    user-select:none;
-  }
-  .gesture-label.recog{
-    color:var(--gold); text-shadow:0 0 12px rgba(255,176,32,0.5);
-  }
-
   ::selection{ background:rgba(255,59,26,0.3); }
+  #stabilityMeter{ user-select:none; }
+  #reconstructionText{ user-select:none; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -578,7 +569,6 @@
     <div class="think-indicator" id="thinkIndicator">Thinking<span class="dots"></span></div>
     <div class="tool-indicator" id="toolIndicator"></div>
     <div class="hand-indicator" id="handIndicator"><span class="dot"></span>HAND — STANDBY</div>
-    <div class="gesture-label" id="gestureLabel">&nbsp;</div>
     <div class="response-line" id="responseLine"></div>
   </div>
 </div>
@@ -670,22 +660,6 @@
       o.connect(g).connect(c.destination);
       o.start(c.currentTime);
       o.stop(c.currentTime + duration);
-    }catch(_){}
-  }
-  function noise(duration, vol){
-    try{
-      const c = getAudioCtx();
-      const bufSize = c.sampleRate * duration;
-      const buf = c.createBuffer(1, bufSize, c.sampleRate);
-      const data = buf.getChannelData(0);
-      for(let i=0;i<bufSize;i++) data[i] = (Math.random()*2-1) * Math.pow(1-i/bufSize, 2);
-      const src = c.createBufferSource();
-      src.buffer = buf;
-      const g = c.createGain();
-      g.gain.setValueAtTime(vol||0.04, c.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
-      src.connect(g).connect(c.destination);
-      src.start(c.currentTime);
     }catch(_){}
   }
   const audioFeed = {
@@ -862,57 +836,160 @@
   }
 
   function draw(){
+    try{
     const w = canvas.width/DPR, h = canvas.height/DPR;
     ctx.clearRect(0,0,w,h);
     t += 0.016;
 
-    const cx = w/2, cy = h/2;
+    const SMOOTH_IDLE = 0.1, SMOOTH_SCALE = 0.08;
+
+    // Energy state management
+    const sizeRatio = smoothScale / 2.5;
+    if(energyState === 'normal' && smoothScale > 1.3) energyState = 'charged';
+    else if(energyState === 'charged' && smoothScale > 1.8) energyState = 'overcharged';
+    else if(energyState === 'overcharged' && smoothScale > 2.2) energyState = 'critical';
+    
+    if(energyState === 'critical'){
+      coreStability -= 0.15;
+      if(coreStability <= 0){
+        energyState = 'exploding';
+        explosionTimer = 0;
+      }
+    }
+    if(energyState !== 'critical' && coreStability < 100) coreStability = Math.min(100, coreStability + 0.3);
+    if(smoothScale < 1.2 && energyState !== 'normal' && energyState !== 'exploding' && energyState !== 'reconstructing'){
+      energyState = 'normal';
+    }
+
+    // Explosion sequence
+    if(energyState === 'exploding'){
+      explosionTimer += 0.016;
+      if(explosionTimer > 2.5){
+        energyState = 'reconstructing';
+        reconstructionTimer = 0;
+      }
+    }
+    // Reconstruction sequence
+    if(energyState === 'reconstructing'){
+      reconstructionTimer += 0.016;
+      if(reconstructionTimer > 3){
+        energyState = 'normal';
+        coreStability = 100;
+        smoothScale = 1;
+      }
+    }
+
+    const stateColors = {
+      normal:    { r:255, g:59,  b:26,  haze:[255,59,26],  arc:[180,200,255] },
+      charged:   { r:255, g:120, b:40,  haze:[255,120,40], arc:[200,220,255] },
+      overcharged:{r:255, g:200, b:60, haze:[255,200,60], arc:[220,240,255] },
+      critical:  { r:255, g:40,  b:80,  haze:[255,40,80],  arc:[255,180,200] },
+    };
+    const sc = energyState === 'exploding' || energyState === 'reconstructing'
+      ? stateColors.critical : stateColors[energyState] || stateColors.normal;
+
+    // Shake
+    if(energyState === 'critical' || energyState === 'exploding'){
+      shakeIntensity = energyState === 'exploding' ? 8 : Math.min(6, (2.5 - smoothScale) * 5);
+    } else {
+      shakeIntensity *= 0.9;
+    }
+    const shX = shakeIntensity > 0.5 ? (Math.random()-0.5)*shakeIntensity : 0;
+    const shY = shakeIntensity > 0.5 ? (Math.random()-0.5)*shakeIntensity : 0;
+
+    let tx = 0, ty = 0, ts = 1;
+    if(handPositions.length > 0){
+      const hx = (handPositions[0].x - 0.5) * 24;
+      const hy = (handPositions[0].y - 0.5) * 24;
+      tx = hx;
+      ty = hy;
+    }
+    if(handPositions.length >= 2){
+      const dist = Math.hypot(
+        handPositions[0].x - handPositions[1].x,
+        handPositions[0].y - handPositions[1].y
+      );
+      ts = 1 + (dist - 0.4) * 3;
+      ts = Math.max(0.8, Math.min(2.5, ts));
+    }
+
+    smoothOfx += (tx - smoothOfx) * SMOOTH_IDLE;
+    smoothOfy += (ty - smoothOfy) * SMOOTH_IDLE;
+    smoothScale += (ts - smoothScale) * SMOOTH_SCALE;
+
+    // Orb position with shake and rotation offset
+    const wobX = Math.sin(t*0.7)*2;
+    const wobY = Math.cos(t*0.5)*2;
+    const cx = w/2 + smoothOfx + shX + wobX, cy = h/2 + smoothOfy + shY + wobY;
     const scale = Math.min(w,h)/400;
-    const coreR = 150*scale;
+    const coreR = 150 * scale * smoothScale;
 
     const isThinking = stateName === 'thinking';
     const isSpeaking = stateName === 'speaking';
     const isError = stateName === 'error';
     const stateBoost = isError ? 1.8 : (isSpeaking || stateName === 'listening') ? 1.3 : isThinking ? 2.2 : 1;
-    const handGlow = handDetected ? 0.12 + Math.sin(t*2)*0.06 : 0;
+    const scaleGlow = Math.max(0, (smoothScale - 1) * 0.3);
+    const handGlow = 0.08 + Math.sin(t*1.7)*0.04
+      + (handDetected ? 0.12 + Math.sin(t*2)*0.06 : 0)
+      + scaleGlow
+      + (energyState === 'critical' ? 0.4 : 0) + (energyState === 'overcharged' ? 0.2 : 0);
     const pulse = 1 + Math.sin(t*1.3*stateBoost)*0.02*stateBoost + audioAmp*0.08 + handGlow*0.04;
     const flicker = 0.7 + Math.sin(t*4.1*stateBoost)*0.1 + Math.sin(t*11*stateBoost)*0.06 + audioAmp*0.3 + handGlow*0.4;
 
-    // outer heat haze
-    let hazeAlpha = 0.10;
-    if(isThinking) hazeAlpha = 0.18 + Math.sin(t*2.5)*0.06;
-    else if(isSpeaking) hazeAlpha = 0.14 + Math.sin(t*1.8)*0.04;
-    else if(isError) hazeAlpha = 0.12 + Math.sin(t*8)*0.08;
-    let haze = ctx.createRadialGradient(cx,cy,coreR*0.3,cx,cy,coreR*1.65);
-    haze.addColorStop(0, `rgba(255,59,26,${hazeAlpha})`);
-    haze.addColorStop(1, 'rgba(255,59,26,0)');
-    ctx.fillStyle = haze;
+    // outer heat haze — state-colored
+    let st = energyState === 'exploding' ? 0.35 : energyState === 'critical' ? 0.3 : energyState === 'overcharged' ? 0.25 : 0.18;
+    let hazeAlpha = (0.12 + Math.sin(t*2.3)*0.04) * (1 + (smoothScale-1)*0.5);
+    if(isThinking) hazeAlpha = Math.max(hazeAlpha, 0.18 + Math.sin(t*2.5)*0.06);
+    else if(isSpeaking) hazeAlpha = Math.max(hazeAlpha, 0.14 + Math.sin(t*1.8)*0.04);
+    hazeAlpha = Math.min(0.5, hazeAlpha);
+    let hazeGrad = ctx.createRadialGradient(cx,cy,coreR*0.1,cx,cy,coreR*1.8);
+    hazeGrad.addColorStop(0, `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${hazeAlpha})`);
+    hazeGrad.addColorStop(0.6, `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${hazeAlpha*0.4})`);
+    hazeGrad.addColorStop(1, `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},0)`);
+    ctx.fillStyle = hazeGrad;
     ctx.beginPath();
-    ctx.arc(cx,cy,coreR*1.65*pulse,0,Math.PI*2);
+    ctx.arc(cx,cy,coreR*1.8*pulse,0,Math.PI*2);
     ctx.fill();
 
-    // dark plated shell
-    let shellGrad = ctx.createRadialGradient(cx-coreR*0.3, cy-coreR*0.3, coreR*0.1, cx, cy, coreR);
-    if(isThinking){
-      shellGrad.addColorStop(0, '#4a2214');
-      shellGrad.addColorStop(0.4, '#2a1208');
-      shellGrad.addColorStop(1, '#0a0605');
-    } else {
-      shellGrad.addColorStop(0, '#3a1c14');
-      shellGrad.addColorStop(0.55, '#1c0f0b');
-      shellGrad.addColorStop(1, '#0a0605');
+    // plasma core — multiple rotating layers
+    for(let li=0; li<plasmaLayers.length; li++){
+      const pl = plasmaLayers[li];
+      pl.angle += pl.speed * 0.02 * (energyState === 'exploding' ? 4 : energyState === 'critical' ? 2 : 1);
+      const pr = coreR * pl.radius * pulse;
+      const px = cx + Math.cos(pl.angle) * pr * 0.15;
+      const py = cy + Math.sin(pl.angle) * pr * 0.15;
+      const intensity = (energyState === 'exploding' ? 1 : energyState === 'critical' ? 0.9 : 0.7 + Math.sin(t*2+li)*0.15);
+      const pa = 0.15 * intensity * (1 + (smoothScale-1)*0.3);
+      const pg = ctx.createRadialGradient(px, py, 0, px, py, pr);
+      pg.addColorStop(0, `rgba(${sc.r*0.6+100},${sc.g*0.6},${sc.b*0.6},${pa*1.5})`);
+      pg.addColorStop(0.5, `rgba(${sc.r*0.8},${sc.g*0.8},${sc.b*0.5},${pa*0.8})`);
+      pg.addColorStop(1, `rgba(${sc.r*0.3},${sc.g*0.3},${sc.b*0.3},0)`);
+      ctx.fillStyle = pg;
+      ctx.beginPath();
+      ctx.arc(cx, cy, pr, 0, Math.PI*2);
+      ctx.fill();
     }
+
+    // dark shell overlay with state border
+    let shellGrad = ctx.createRadialGradient(cx-coreR*0.3, cy-coreR*0.3, coreR*0.1, cx, cy, coreR);
+    const shellBase = isThinking ? '#4a2214' : '#3a1c14';
+    shellGrad.addColorStop(0, shellBase);
+    shellGrad.addColorStop(0.55, '#1c0f0b');
+    shellGrad.addColorStop(1, '#0a0605');
     ctx.fillStyle = shellGrad;
     ctx.beginPath();
     ctx.arc(cx,cy,coreR*pulse,0,Math.PI*2);
     ctx.fill();
 
-    // pulsing ring (thinking only)
-    if(isThinking){
-      const ringAlpha = 0.08 + Math.sin(t*2.8)*0.05;
+    // energy state ring
+    {
+      const ringAlpha = isThinking
+        ? 0.08 + Math.sin(t*2.8)*0.05
+        : 0.04 + Math.sin(t*2.2)*0.03;
+      const stateRingBoost = energyState === 'critical' ? 0.3 : energyState === 'overcharged' ? 0.15 : 0;
       ctx.beginPath();
-      ctx.arc(cx,cy,coreR*(1.08 + Math.sin(t*3.2)*0.04),0,Math.PI*2);
-      ctx.strokeStyle = `rgba(255,80,30,${ringAlpha})`;
+      ctx.arc(cx,cy,coreR*(1.08 + Math.sin(t*3.2)*0.04 + (smoothScale-1)*0.06),0,Math.PI*2);
+      ctx.strokeStyle = `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${ringAlpha + stateRingBoost})`;
       ctx.lineWidth = 2*scale;
       ctx.setLineDash([4*scale, 6*scale]);
       ctx.stroke();
@@ -957,14 +1034,15 @@
     });
     ctx.restore();
 
-    // electrical arcs (thinking only)
-    if(isThinking){
+    // dynamic electrical arcs with state color
+    {
       ctx.save();
       ctx.beginPath();
       ctx.arc(cx,cy,coreR*pulse,0,Math.PI*2);
       ctx.clip();
+      const arcBoost = (isThinking ? 1 : 0.35) * (0.5 + 0.5 * smoothScale) * (energyState === 'critical' ? 2 : energyState === 'overcharged' ? 1.5 : 1);
       ARCS.forEach((pts, idx) => {
-        const a = (0.25 + 0.2*Math.sin(t*4 + idx*1.7)) * (0.6 + 0.4*Math.sin(t*2.3 + idx));
+        const a = (0.25 + 0.2*Math.sin(t*4 + idx*1.7)) * (0.6 + 0.4*Math.sin(t*2.3 + idx)) * arcBoost;
         if(a < 0.05) return;
         const mapped = pts.map(p => ({x: p.x*scale + offX + (Math.random()-0.5)*2*scale, y: p.y*scale + offY + (Math.random()-0.5)*2*scale}));
         ctx.beginPath();
@@ -974,11 +1052,11 @@
           const cy2 = (mapped[i-1].y + mapped[i].y)/2 + Math.cos(t*5 + i + idx)*5*scale;
           ctx.quadraticCurveTo(cx2, cy2, mapped[i].x, mapped[i].y);
         }
-        const arcA = Math.max(0, Math.min(0.5, a));
-        ctx.strokeStyle = `rgba(180,200,255,${arcA})`;
-        ctx.lineWidth = (1.5 + Math.sin(t*3 + idx)*0.5) * scale;
-        ctx.shadowColor = `rgba(180,200,255,${arcA*0.6})`;
-        ctx.shadowBlur = 15*scale*arcA;
+        const arcA = Math.max(0, Math.min(0.6, a));
+        ctx.strokeStyle = `rgba(${sc.arc[0]},${sc.arc[1]},${sc.arc[2]},${arcA})`;
+        ctx.lineWidth = (1.5 + Math.sin(t*3 + idx)*0.5 + (energyState==='critical'?1:0)) * scale;
+        ctx.shadowColor = `rgba(${sc.arc[0]},${sc.arc[1]},${sc.arc[2]},${arcA*0.6})`;
+        ctx.shadowBlur = (15 + (energyState==='critical'?20:0))*scale*arcA;
         ctx.stroke();
         ctx.strokeStyle = `rgba(255,255,255,${arcA*0.3})`;
         ctx.lineWidth = 0.5*scale;
@@ -989,38 +1067,103 @@
       ctx.restore();
     }
 
-    // rim light
+    // rim light — state-colored
     ctx.beginPath();
     ctx.arc(cx,cy,coreR*pulse,0,Math.PI*2);
-    ctx.strokeStyle = `rgba(255,59,26,${0.35+audioAmp*0.3})`;
+    const rimIntensity = 0.35 + (energyState==='critical'?0.4:0) + (energyState==='overcharged'?0.2:0) + audioAmp*0.3;
+    ctx.strokeStyle = `rgba(${sc.r},${sc.g},${sc.b},${Math.min(1, rimIntensity)})`;
     ctx.lineWidth = 1.5*scale;
-    ctx.shadowColor = 'rgba(255,59,26,0.6)';
-    ctx.shadowBlur = 14*scale;
+    ctx.shadowColor = `rgba(${sc.r},${sc.g},${sc.b},0.6)`;
+    ctx.shadowBlur = (14 + (energyState==='critical'?20:0))*scale;
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // hand-reactive glow ring
-    if(handDetected){
-      const hg = 0.15 + Math.sin(t*2.5)*0.08;
-      ctx.beginPath();
-      ctx.arc(cx,cy,coreR*(1.04 + Math.sin(t*1.8)*0.025),0,Math.PI*2);
-      ctx.strokeStyle = `rgba(255,176,32,${hg})`;
-      ctx.lineWidth = 2*scale;
-      ctx.shadowColor = `rgba(255,176,32,${hg*0.6})`;
-      ctx.shadowBlur = 20*scale;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+    // explosion particles
+    if(energyState === 'exploding'){
+      const explosionProgress = explosionTimer / 2.5;
+      const numParticles = 120;
+      for(let i=0;i<numParticles;i++){
+        const ang = (i/numParticles)*Math.PI*2 + explosionTimer*2;
+        const dist = explosionProgress * (80 + Math.random()*120) * scale * smoothScale;
+        const px = cx + Math.cos(ang) * dist;
+        const py = cy + Math.sin(ang) * dist;
+        const size = (1.5 + Math.random()*3) * scale * (1 - explosionProgress);
+        const pa = Math.max(0, 1 - explosionProgress * 1.2);
+        ctx.beginPath();
+        ctx.arc(px, py, size, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${pa*0.8})`;
+        ctx.shadowColor = `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${pa*0.5})`;
+        ctx.shadowBlur = 15*scale*pa;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
     }
 
-    // gesture-recognition flash
-    if(gestureFlash > 0.01){
-      const gf = gestureFlash * (0.6 + Math.sin(t*20)*0.4);
+    // reconstruction particles
+    if(energyState === 'reconstructing'){
+      const recProgress = Math.min(1, reconstructionTimer / 3);
+      const numParticles = 80;
+      for(let i=0;i<numParticles;i++){
+        const ang = (i/numParticles)*Math.PI*2 + reconstructionTimer*1.5;
+        const baseDist = (200 + Math.random()*100) * scale;
+        const dist = baseDist * (1 - recProgress * 0.9);
+        const px = cx + Math.cos(ang) * dist;
+        const py = cy + Math.sin(ang) * dist;
+        const size = (1 + Math.random()*2) * scale * (0.3 + recProgress * 0.7);
+        const pa = Math.min(0.8, recProgress * 2);
+        ctx.beginPath();
+        ctx.arc(px, py, size * (1 - recProgress * 0.3), 0, Math.PI*2);
+        ctx.fillStyle = `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${pa*0.6})`;
+        ctx.shadowColor = `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${pa*0.3})`;
+        ctx.shadowBlur = 10*scale*pa;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    // hand-reactive energy tendrils
+    if(handPositions.length > 0){
+      const tAlpha = 0.15 + Math.min(0.3, (smoothScale - 1) * 0.2);
+      const tBlur = (12 + Math.min(20, (smoothScale - 1) * 16)) * scale;
+      handPositions.forEach(hp => {
+        const tx = (hp.x - 0.5) * 100;
+        const ty = (hp.y - 0.5) * 100;
+        const a = Math.atan2(ty - smoothOfy, tx - smoothOfx);
+        const reach = Math.min(80, Math.hypot(tx - smoothOfy, ty - smoothOfx) * 0.70);
+        const r0 = coreR * 1.02;
+        const sx = cx + Math.cos(a) * r0;
+        const sy = cy + Math.sin(a) * r0;
+        const ex = sx + Math.cos(a) * reach + (Math.random() - 0.5) * 6;
+        const ey = sy + Math.sin(a) * reach + (Math.random() - 0.5) * 6;
+        const pts = [];
+        const segs = 6;
+        for(let i=0;i<=segs;i++){
+          const f = i/segs;
+          const wave = Math.sin(t*4 + i*1.7 + f*5) * 4 * scale;
+          pts.push({
+            x: sx + (ex-sx)*f + wave * Math.cos(a + 1.5),
+            y: sy + (ey-sy)*f + wave * Math.sin(a + 1.5)
+          });
+        }
+        drawPolyline(pts, '180,210,255', 1.2*scale, tAlpha, tBlur);
+        drawPolyline(pts, '255,255,255', 0.5*scale, tAlpha*0.4, 0);
+      });
+    }
+
+    // glow ring
+    {
+      const sg = Math.min(0.3, (smoothScale - 1) * 0.15);
+      const hg = handDetected
+        ? 0.15 + Math.sin(t*2.5)*0.08 + sg
+        : 0.06 + Math.sin(t*2)*0.03;
       ctx.beginPath();
-      ctx.arc(cx,cy,coreR*(1.08 + Math.sin(t*6)*0.02),0,Math.PI*2);
-      ctx.strokeStyle = `rgba(255,220,100,${gf})`;
-      ctx.lineWidth = 3*scale;
-      ctx.shadowColor = `rgba(255,220,100,${gf*0.7})`;
-      ctx.shadowBlur = 30*scale;
+      const ringR = coreR * (handDetected ? 1.04 + Math.sin(t*1.8)*0.025 : 1.03 + Math.sin(t*1.5)*0.015);
+      ctx.arc(cx,cy,ringR,0,Math.PI*2);
+      const stateColor = energyState === 'critical' || energyState === 'exploding' ? `${sc.haze[0]},${sc.haze[1]},${sc.haze[2]}` : '255,176,32';
+      ctx.strokeStyle = `rgba(${stateColor},${hg})`;
+      ctx.lineWidth = (handDetected ? 2 : 1.2) * scale;
+      ctx.shadowColor = `rgba(255,176,32,${hg*0.6})`;
+      ctx.shadowBlur = (handDetected ? 20 : 10) * scale;
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
@@ -1035,7 +1178,64 @@
     ctx.arc(cx,cy,coreR*0.3,0,Math.PI*2);
     ctx.fill();
 
+    // hand-reactive particles
+    if(handDetected && handPositions.length > 0){
+      const hp = handPositions[0];
+      const absPx = cx + (hp.x - 0.5) * 100;
+      const absPy = cy + (hp.y - 0.5) * 100;
+      if(prevHandPos){
+        const vx = absPx - prevHandPos.x;
+        const vy = absPy - prevHandPos.y;
+        const speed = Math.hypot(vx, vy);
+        if(speed > 0.5){
+          const n = Math.min(4, 1 + Math.floor(speed * 1.5));
+          for(let i=0;i<n;i++){
+            handParticles.push({
+              x: absPx + (Math.random() - 0.5) * 8,
+              y: absPy + (Math.random() - 0.5) * 8,
+              vx: -vx * 0.15 + (Math.random() - 0.5) * 1.5,
+              vy: -vy * 0.15 + (Math.random() - 0.5) * 1.5,
+              life: 0.7 + Math.random() * 0.6,
+              size: 1.5 + Math.random() * 3
+            });
+          }
+        }
+      }
+      prevHandPos = { x: absPx, y: absPy };
+    } else {
+      prevHandPos = null;
+    }
+
+    for(let i=handParticles.length-1;i>=0;i--){
+      const p = handParticles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.96;
+      p.vy *= 0.96;
+      p.life -= 0.025;
+      if(p.life <= 0){
+        handParticles.splice(i, 1);
+        continue;
+      }
+      const pa = Math.min(1, p.life * 1.5);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * scale * pa, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,${180 + Math.floor(50 * pa)},${60 + Math.floor(80 * pa)},${pa * 0.55})`;
+      ctx.shadowColor = `rgba(255,200,100,${pa * 0.35})`;
+      ctx.shadowBlur = 8 * scale * pa;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    if(handParticles.length > MAX_PARTICLES){
+      handParticles.splice(0, handParticles.length - MAX_PARTICLES);
+    }
+
     requestAnimationFrame(draw);
+    }catch(e){
+      console.warn('[DRAW] Error:', e);
+      requestAnimationFrame(draw);
+    }
   }
   requestAnimationFrame(draw);
 
@@ -1113,12 +1313,10 @@
 
   async function apiGet(path){ const r=await fetch(path); if(!r.ok) throw new Error(await r.text()); return r.json(); }
   async function apiPost(path,body){ const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-  async function apiDel(path){ const r=await fetch(path,{method:'DELETE'}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
 
   async function fetchConvList(){ return apiGet(CONV_API+'/'); }
   async function fetchConv(id){ return apiGet(CONV_API+'/'+encodeURIComponent(id)); }
   async function saveConv(conv){ return apiPost(CONV_API+'/', conv); }
-  async function deleteConvFile(id){ return apiDel(CONV_API+'/'+encodeURIComponent(id)); }
 
   function loadActiveId(){ return localStorage.getItem(ACTIVE_KEY)||null; }
   function saveActiveId(id){ if(id)localStorage.setItem(ACTIVE_KEY,id); else localStorage.removeItem(ACTIVE_KEY); }
@@ -1356,11 +1554,203 @@
 
   let accumulatedResponse = '';
 
+  /* ─── FALSO Voice Engine ─── */
+  const FalsoVoice = {
+    ctx: null,
+    isSpeaking: false,
+    utt: null,
+    drone: null,
+    droneGain: null,
+    metal: null,
+    metalGain: null,
+    sub: null,
+    subGain: null,
+    reverbMix: null,
+    convolver: null,
+    compressor: null,
+    voiceSelected: false,
+
+    init(){
+      this.ctx = getAudioCtx();
+      this.compressor = this.ctx.createDynamicsCompressor();
+      this.compressor.threshold.value = -24;
+      this.compressor.knee.value = 12;
+      this.compressor.ratio.value = 6;
+      this.compressor.attack.value = 0.008;
+      this.compressor.release.value = 0.15;
+      this.compressor.connect(this.ctx.destination);
+
+      // Generate impulse response for reverb
+      const sr = this.ctx.sampleRate;
+      const len = sr * 1.8;
+      const impulse = this.ctx.createBuffer(2, len, sr);
+      for(let ch=0;ch<2;ch++){
+        const data = impulse.getChannelData(ch);
+        for(let i=0;i<len;i++){
+          const n = (Math.random()*2-1);
+          const env = Math.pow(1 - i/len, 2.5);
+          data[i] = n * env * (ch===0 ? 0.7 : 0.5);
+        }
+      }
+      this.convolver = this.ctx.createConvolver();
+      this.convolver.buffer = impulse;
+      this.reverbMix = this.ctx.createGain();
+      this.reverbMix.gain.value = 0.35;
+    },
+
+    selectVoice(){
+      if(this.voiceSelected) return;
+      const voices = speechSynthesis.getVoices();
+      let best = null;
+      for(const v of voices){
+        if(v.lang.startsWith('en') && v.name.toLowerCase().includes('male')){ best = v; break; }
+      }
+      if(!best && voices.length){
+        best = voices.reduce((a,b)=> a.name.length < b.name.length ? a : b);
+      }
+      window.falsoVoiceObj = best;
+      this.voiceSelected = true;
+    },
+
+    speak(text){
+      if(!text) return;
+      if(!this.ctx) this.init();
+
+      this.stop();
+      this.isSpeaking = true;
+      const ctx = this.ctx;
+
+      // Pre-speak pause
+      ctx.suspend().then(()=>{ setTimeout(()=> ctx.resume(), 180); });
+
+      // Build the voice chain
+      this.droneGain = ctx.createGain();
+      this.droneGain.gain.setValueAtTime(0, ctx.currentTime + 0.2);
+      this.droneGain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.6);
+
+      this.drone = ctx.createOscillator();
+      this.drone.type = 'sine';
+      this.drone.frequency.value = 55;
+      this.drone.frequency.linearRampToValueAtTime(58 + Math.sin(text.length)*2, ctx.currentTime + 1.5);
+      this.drone.connect(this.droneGain);
+      this.droneGain.connect(this.convolver);
+      this.convolver.connect(this.reverbMix);
+      this.reverbMix.connect(this.compressor);
+
+      // Sub-harmonic (very deep, felt not heard)
+      this.subGain = ctx.createGain();
+      this.subGain.gain.setValueAtTime(0, ctx.currentTime + 0.3);
+      this.subGain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.8);
+
+      this.sub = ctx.createOscillator();
+      this.sub.type = 'sine';
+      this.sub.frequency.value = 32;
+      this.sub.connect(this.subGain);
+      this.subGain.connect(this.compressor);
+
+      // Metallic resonance
+      this.metalGain = ctx.createGain();
+      this.metalGain.gain.setValueAtTime(0, ctx.currentTime + 0.4);
+      this.metalGain.gain.linearRampToValueAtTime(0.04, ctx.currentTime + 1);
+
+      const metalFilter = ctx.createBiquadFilter();
+      metalFilter.type = 'bandpass';
+      metalFilter.frequency.value = 440;
+      metalFilter.Q.value = 2.5;
+
+      this.metal = ctx.createOscillator();
+      this.metal.type = 'triangle';
+      this.metal.frequency.value = 110;
+      this.metal.connect(metalFilter);
+      metalFilter.connect(this.metalGain);
+      this.metalGain.connect(this.reverbMix);
+
+      // Start oscillators
+      this.drone.start(ctx.currentTime + 0.2);
+      this.sub.start(ctx.currentTime + 0.3);
+      this.metal.start(ctx.currentTime + 0.4);
+
+      // SpeechSynthesis
+      this.selectVoice();
+      try{
+        speechSynthesis.cancel();
+        this.utt = new SpeechSynthesisUtterance(text);
+        if(window.falsoVoiceObj) this.utt.voice = window.falsoVoiceObj;
+        this.utt.rate = 0.72;
+        this.utt.pitch = 0.35;
+        this.utt.volume = 1;
+
+        this.utt.onend = ()=>{
+          this.fadeOut(ctx);
+        };
+        this.utt.onerror = ()=>{
+          this.fadeOut(ctx);
+        };
+        speechSynthesis.speak(this.utt);
+      }catch(e){
+        this.fadeOut(ctx);
+      }
+    },
+
+    fadeOut(ctx){
+      const now = ctx.currentTime;
+      if(this.droneGain){
+        this.droneGain.gain.cancelScheduledValues(now);
+        this.droneGain.gain.setValueAtTime(this.droneGain.gain.value || 0, now);
+        this.droneGain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+      }
+      if(this.subGain){
+        this.subGain.gain.cancelScheduledValues(now);
+        this.subGain.gain.setValueAtTime(this.subGain.gain.value || 0, now);
+        this.subGain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+      }
+      if(this.metalGain){
+        this.metalGain.gain.cancelScheduledValues(now);
+        this.metalGain.gain.setValueAtTime(this.metalGain.gain.value || 0, now);
+        this.metalGain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+      }
+      setTimeout(()=>{
+        this.stop();
+        this.isSpeaking = false;
+      }, 2000);
+    },
+
+    stop(){
+      try{
+        speechSynthesis.cancel();
+      }catch(_){}
+      if(this.drone){
+        try{ this.drone.stop(); }catch(_){}
+        this.drone = null;
+      }
+      if(this.sub){
+        try{ this.sub.stop(); }catch(_){}
+        this.sub = null;
+      }
+      if(this.metal){
+        try{ this.metal.stop(); }catch(_){}
+        this.metal = null;
+      }
+      this.utt = null;
+    }
+  };
+
+  // Pre-load voices
+  if('speechSynthesis' in window){
+    speechSynthesis.getVoices();
+    speechSynthesis.onvoiceschanged = ()=> FalsoVoice.selectVoice();
+  }
+
   function speak(text, holdMs){
     responseLine.textContent = text;
     responseLine.classList.add('show');
     if(respTimer) clearTimeout(respTimer);
     respTimer = setTimeout(()=>{ responseLine.classList.remove('show'); }, holdMs || 4400);
+
+    // Speak with FALSO voice
+    if(!navigator.userAgent.includes('HeadlessChrome')){
+      FalsoVoice.speak(text);
+    }
   }
 
   function appendResponse(chunk){
@@ -1568,80 +1958,33 @@
   let handDetected = false;
   let handTrackingActive = false;
   let handCount = 0;
+  let prevHandDetected = false;
   const handIndicator = document.getElementById('handIndicator');
   let handTrackingVideo = null;
 
-  /* ─── Gesture recognition ─── */
-  const GESTURE_NAMES = {
-    OPEN_PALM:'OPEN PALM', FIST:'FIST',
-    THUMBS_UP:'THUMBS UP', THUMBS_DOWN:'THUMBS DOWN',
-    PEACE:'PEACE', POINTING:'POINTING'
-  };
-  const GESTURE_THRESHOLD = 0.7;
-  const GESTURE_DEBOUNCE = 500;
-  let lastGestureTime = 0;
-  let gestureFlash = 0;
-  const gestureLabel = document.getElementById('gestureLabel');
-
-  function distance(a, b){
-    const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
-    return Math.sqrt(dx*dx + dy*dy + dz*dz);
-  }
-
-  function fingerExtended(lm, tip, pip, mcp){
-    return distance(lm[tip], lm[mcp]) > distance(lm[pip], lm[mcp]) * GESTURE_THRESHOLD;
-  }
-
-  function recognizeGesture(landmarks){
-    const indexEx = fingerExtended(landmarks, 8, 6, 5);
-    const middleEx = fingerExtended(landmarks, 12, 10, 9);
-    const ringEx = fingerExtended(landmarks, 16, 14, 13);
-    const pinkyEx = fingerExtended(landmarks, 20, 18, 17);
-
-    const thumbEx = distance(landmarks[4], landmarks[5]) > distance(landmarks[3], landmarks[5]) * GESTURE_THRESHOLD;
-
-    if(thumbEx && indexEx && middleEx && ringEx && pinkyEx) return 'OPEN_PALM';
-
-    if(!indexEx && !middleEx && !ringEx && !pinkyEx && !thumbEx) return 'FIST';
-
-    if(!indexEx && !middleEx && !ringEx && !pinkyEx && thumbEx){
-      return landmarks[4].y < landmarks[5].y ? 'THUMBS_UP' : 'THUMBS_DOWN';
-    }
-
-    if(indexEx && middleEx && !ringEx && !pinkyEx) return 'PEACE';
-
-    if(indexEx && !middleEx && !ringEx && !pinkyEx) return 'POINTING';
-
-    return null;
-  }
-
-  function onGesture(gestureKey){
-    console.log(`[GESTURE] ${GESTURE_NAMES[gestureKey] || gestureKey}`);
-    gestureLabel.textContent = `GESTURE — ${GESTURE_NAMES[gestureKey] || gestureKey}`;
-    gestureLabel.classList.add('recog');
-    gestureFlash = 1;
-    setTimeout(() => { gestureFlash = 0; }, 600);
-
-    switch(gestureKey){
-      case 'OPEN_PALM':
-        if(stateName === 'idle') setState('listening');
-        break;
-      case 'FIST':
-        if(stateName !== 'idle') setState('idle');
-        break;
-      case 'THUMBS_UP':
-        showNetwork('CONFIRMED');
-        break;
-      case 'THUMBS_DOWN':
-        showNetwork('CANCELLED');
-        break;
-      case 'PEACE':
-        newConversation();
-        break;
-      case 'POINTING':
-        showNetwork('SELECTED');
-        break;
-    }
+  /* ─── Hand-reactive orb control ─── */
+  let handPositions = [];
+  let smoothOfx = 0, smoothOfy = 0, smoothScale = 1;
+  const MAX_PARTICLES = 80;
+  let handParticles = [];
+  let prevHandPos = null;
+  let energyState = 'normal'; // normal, charged, overcharged, critical, exploding, reconstructing
+  let coreStability = 100;
+  let prevHandRotation = 0;
+  let smoothHandRotation = 0;
+  let explosionTimer = 0;
+  let reconstructionTimer = 0;
+  let plasmaLayers = [];
+  let shakeIntensity = 0;
+  let chromaticAberration = 0;
+  let bloomAmount = 0;
+  for(let i=0;i<5;i++){
+    plasmaLayers.push({
+      angle: Math.random()*Math.PI*2,
+      speed: 0.3 + Math.random()*0.7,
+      radius: 0.6 + Math.random()*0.4,
+      color: [255, 80 + Math.random()*60, 20 + Math.random()*30]
+    });
   }
 
   async function initHandTracking(){
@@ -1656,7 +1999,7 @@
     let stream;
     try{
       stream = await navigator.mediaDevices.getUserMedia({ video: { width:320, height:240, facingMode:'user' } });
-      console.log('[HAND] Webcam stream obtained');
+      console.log('[HAND] Camera initialized');
     }catch(e){
       console.warn('[HAND] No webcam available:', e.message);
       handIndicator.textContent = 'HAND — NO CAMERA';
@@ -1669,7 +2012,7 @@
     handTrackingVideo.width = 320;
     handTrackingVideo.height = 240;
     handTrackingVideo.setAttribute('playsinline', '');
-    handTrackingVideo.style.display = 'none';
+    handTrackingVideo.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;z-index:-1';
     document.body.appendChild(handTrackingVideo);
     try{
       await handTrackingVideo.play();
@@ -1709,28 +2052,50 @@
       }
       handCount = results.multiHandLandmarks ? results.multiHandLandmarks.length : 0;
       handDetected = handCount > 0;
+      console.log('[HAND] Hands detected count:', handCount);
+      if(handDetected) console.log('[HAND] Hand landmarks received');
+      if(handDetected && !prevHandDetected) console.log('[HAND] Interactive mode entered');
+      prevHandDetected = handDetected;
       handIndicator.classList.toggle('active', handDetected);
       handIndicator.innerHTML = handDetected
         ? '<span class="dot"></span>HAND — DETECTED'
         : '<span class="dot"></span>HAND — STANDBY';
-      if(handDetected && results.multiHandLandmarks[0]){
-        const now = Date.now();
-        const gesture = recognizeGesture(results.multiHandLandmarks[0]);
-        if(gesture && (now - lastGestureTime > GESTURE_DEBOUNCE)){
-          lastGestureTime = now;
-          onGesture(gesture);
-        } else if(!gesture && !gestureFlash){
-          gestureLabel.textContent = '\u00A0';
-          gestureLabel.classList.remove('recog');
+
+      handPositions = handDetected
+        ? results.multiHandLandmarks.map(lm => ({ x: 1 - lm[0].x, y: lm[0].y }))
+        : [];
+      if(handPositions.length >= 2){
+        const dx = handPositions[0].x - handPositions[1].x;
+        const dy = handPositions[0].y - handPositions[1].y;
+        const rot = Math.atan2(dy, dx);
+        if(prevHandRotation !== 0){
+          let diff = rot - prevHandRotation;
+          if(diff > Math.PI) diff -= Math.PI*2;
+          if(diff < -Math.PI) diff += Math.PI*2;
+          smoothHandRotation += diff * 0.3;
         }
+        prevHandRotation = rot;
       } else {
-        gestureLabel.textContent = '\u00A0';
-        gestureLabel.classList.remove('recog');
+        prevHandRotation = 0;
+        smoothHandRotation *= 0.95;
       }
     });
 
     handTrackingActive = true;
     let frameCount = 0;
+
+    // Initialize the MediaPipe model (needed for v0.4+)
+    if(typeof hands.initialize === 'function'){
+      console.log('[HAND] Calling hands.initialize()...');
+      try{
+        await hands.initialize();
+        console.log('[HAND] MediaPipe initialized');
+      }catch(e){
+        console.warn('[HAND] hands.initialize() failed:', e.message || e);
+      }
+    } else {
+      console.log('[HAND] hands.initialize not available (using lazy init path)');
+    }
 
     const SEND_TIMEOUT = 60000;
 
@@ -1740,8 +2105,10 @@
         setTimeout(trackLoop, 50);
         return;
       }
-      if(handTrackingVideo.readyState >= 2){
+      const rs = handTrackingVideo.readyState;
+      if(rs >= 2){
         framePending = true;
+        if(frameCount === 0) console.log('[HAND] trackLoop: sending first frame (readyState:', rs, ')');
         try{
           await Promise.race([
             hands.send({ image: handTrackingVideo }),
@@ -1751,8 +2118,10 @@
           if(frameCount === 1) console.log('[HAND] First frame sent successfully');
         }catch(e){
           framePending = false;
-          console.warn('[HAND] Frame error:', e.message);
+          console.warn('[HAND] Frame error:', e.message || e);
         }
+      } else {
+        if(frameCount === 0) console.log('[HAND] trackLoop: waiting for video data (readyState:', rs, ')');
       }
       setTimeout(trackLoop, 80);
     }
@@ -1849,6 +2218,49 @@
   }
 
   init();
+
+  /* ─── Stability meter ─── */
+  const stabEl = document.createElement('div');
+  stabEl.id = 'stabilityMeter';
+  stabEl.style.cssText = 'position:fixed;bottom:8vh;left:50%;transform:translateX(-50%);font-family:var(--f-mono);font-size:9px;letter-spacing:0.12em;color:rgba(245,237,230,0.35);text-align:center;opacity:0;transition:opacity 0.5s ease;pointer-events:none;z-index:5';
+  stabEl.innerHTML = 'CORE STABILITY: <span id="stabVal">100</span>%';
+  document.body.appendChild(stabEl);
+
+  // Update stability meter in the draw loop
+  const originalDraw = draw;
+  draw = function(){
+    try{
+    // Call original draw logic duplicated here since we can't easily hook in
+    // We'll add stability update in a separate rAF loop
+    originalDraw();
+    }catch(e){console.warn('[DRAW] Error:', e);}
+  };
+
+  // Separate loop for UI overlays
+  function updateUI(){
+    const stab = document.getElementById('stabVal');
+    if(stab) stab.textContent = Math.max(0, Math.floor(coreStability));
+    const meter = document.getElementById('stabilityMeter');
+    if(meter){
+      meter.style.opacity = energyState === 'critical' || energyState === 'overcharged' ? '1' : '0';
+      meter.style.color = coreStability < 30 ? 'rgba(255,40,40,0.8)' : coreStability < 60 ? 'rgba(255,176,32,0.6)' : 'rgba(245,237,230,0.35)';
+    }
+    const recText = document.getElementById('reconstructionText');
+    if(recText){
+      recText.style.opacity = energyState === 'reconstructing' ? '1' : '0';
+      recText.textContent = reconstructionTimer < 1.5 ? 'RECONSTRUCTING CORE...' : 'CORE RECONSTRUCTED';
+    }
+    requestAnimationFrame(updateUI);
+  }
+  requestAnimationFrame(updateUI);
+
+  // Reconstruction text
+  const recText = document.createElement('div');
+  recText.id = 'reconstructionText';
+  recText.style.cssText = 'position:fixed;bottom:12vh;left:50%;transform:translateX(-50%);font-family:var(--f-display);font-size:14px;letter-spacing:0.3em;color:var(--ember);text-align:center;opacity:0;transition:opacity 0.8s ease;pointer-events:none;z-index:5;text-shadow:0 0 30px rgba(255,34,0,0.3)';
+  recText.textContent = 'RECONSTRUCTING CORE...';
+  document.body.appendChild(recText);
+
 })();
 </script>
 </body>

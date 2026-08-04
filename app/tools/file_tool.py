@@ -1,16 +1,24 @@
 from __future__ import annotations
 
+import asyncio
 import glob as glob_module
 import logging
-import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any, ClassVar
 
-from config.settings import settings
 from app.tools.base import Tool, ToolResult
 from app.tools.registry import ToolRegistry
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+# Dedicated, bounded lane for file operations. A recursive search can scan
+# entire folders and hold a worker for seconds; on the default pool that would
+# starve every other thread-backed operation in the app, so file work gets its
+# own 2-worker executor instead.
+_FILE_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="falso-file-tool")
 
 
 def _allowed_bases() -> list[Path]:
@@ -23,6 +31,16 @@ def _allowed_bases() -> list[Path]:
     if settings.file_tool_workspace:
         bases.append(Path(settings.file_tool_workspace).resolve())
     return bases
+
+
+def _relative_bases() -> list[Path]:
+    """Order bases for relative-path resolution: the configured workspace
+    takes priority, then the standard user folders."""
+    bases = _allowed_bases()
+    if not settings.file_tool_workspace:
+        return bases
+    workspace = Path(settings.file_tool_workspace).resolve()
+    return [workspace] + [b for b in bases if b.resolve() != workspace]
 
 
 def _check_allowed(path: Path) -> Path:
@@ -48,7 +66,7 @@ def _resolve_path(user_path: str) -> Path:
     if p.is_absolute():
         return _check_allowed(p)
 
-    for base in _allowed_bases():
+    for base in _relative_bases():
         try:
             return _check_allowed(base / p)
         except PermissionError:
@@ -67,7 +85,7 @@ class FileTool(Tool):
         "or delete text files. Restricted to Documents, Desktop, "
         "Downloads, and configured workspace."
     )
-    parameters = {
+    parameters: ClassVar[dict] = {
         "type": "object",
         "properties": {
             "command": {
@@ -109,7 +127,7 @@ class FileTool(Tool):
     }
 
     _last_filename: str | None = None
-    _CONTENT_SEPS = [" to ", " into ", " in ", " with ", " as "]
+    _CONTENT_SEPS: ClassVar[list[str]] = [" to ", " into ", " in ", " with ", " as "]
 
     @classmethod
     def _default_path(cls) -> str:
@@ -456,7 +474,7 @@ class FileTool(Tool):
         logger.debug("FileTool: no pattern matched — returning None")
         return None
 
-    async def execute(  # noqa: C901
+    async def execute(
         self,
         command: str = "",
         path: str = "",
@@ -466,28 +484,16 @@ class FileTool(Tool):
         confirmed: bool = False,
         **kwargs,
     ) -> ToolResult:
+        # All filesystem work is blocking; run it in the dedicated file-tool
+        # executor so the event loop never stalls and the default thread pool
+        # is never consumed by long folder scans.
         try:
-            if command == "read":
-                return await self._read(path)
-            elif command == "write":
-                return await self._write(path, content)
-            elif command == "append":
-                return await self._append(path, content)
-            elif command == "mkdir":
-                return await self._mkdir(path)
-            elif command == "list":
-                return await self._list(path)
-            elif command == "search":
-                return await self._search(pattern)
-            elif command == "rename":
-                return await self._rename(path, new_name)
-            elif command == "delete":
-                return await self._delete(path, confirmed)
-            else:
-                return ToolResult(
-                    success=False,
-                    error=f"Unknown command: '{command}'",
-                )
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(
+                _FILE_EXECUTOR,
+                self._dispatch,
+                command, path, content, new_name, pattern, confirmed,
+            )
         except PermissionError as e:
             return ToolResult(success=False, error=str(e))
         except FileNotFoundError as e:
@@ -502,12 +508,54 @@ class FileTool(Tool):
             logger.exception("FileTool unhandled error")
             return ToolResult(success=False, error=str(e))
 
-    async def _read(self, path: str) -> ToolResult:
+    def _dispatch(
+        self,
+        command: str,
+        path: str,
+        content: str,
+        new_name: str,
+        pattern: str,
+        confirmed: bool,
+    ) -> ToolResult:
+        if command == "read":
+            return self._read(path)
+        elif command == "write":
+            return self._write(path, content)
+        elif command == "append":
+            return self._append(path, content)
+        elif command == "mkdir":
+            return self._mkdir(path)
+        elif command == "list":
+            return self._list(path)
+        elif command == "search":
+            return self._search(pattern)
+        elif command == "rename":
+            return self._rename(path, new_name)
+        elif command == "delete":
+            return self._delete(path, confirmed)
+        else:
+            return ToolResult(
+                success=False,
+                error=f"Unknown command: '{command}'",
+            )
+
+    def _read(self, path: str) -> ToolResult:
         if not path:
             return ToolResult(success=False, error="path is required")
         p = _resolve_path(path)
-        if not p.is_file():
+        if not p.exists():
             return ToolResult(success=False, error=f"File not found: {path}")
+        if not p.is_file():
+            return ToolResult(success=False, error=f"Not a file: {path}")
+        size = p.stat().st_size
+        if size > settings.max_file_read_bytes:
+            return ToolResult(
+                success=False,
+                error=(
+                    f"File too large to read ({size} bytes). "
+                    f"Maximum is {settings.max_file_read_bytes} bytes."
+                ),
+            )
         try:
             text = p.read_text(encoding="utf-8")
             return ToolResult(success=True, data={"content": text, "path": str(p)})
@@ -517,9 +565,17 @@ class FileTool(Tool):
                 error=f"Cannot read '{path}': not a text file or unsupported encoding",
             )
 
-    async def _write(self, path: str, content: str) -> ToolResult:
+    def _write(self, path: str, content: str) -> ToolResult:
         if not path:
             return ToolResult(success=False, error="path is required")
+        if len(content) > settings.max_file_write_bytes:
+            return ToolResult(
+                success=False,
+                error=(
+                    f"Content too large ({len(content)} chars). "
+                    f"Maximum is {settings.max_file_write_bytes} chars."
+                ),
+            )
         p = _resolve_path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
@@ -528,7 +584,7 @@ class FileTool(Tool):
             data={"message": f"Written {len(content)} characters to {p.name}", "path": str(p)},
         )
 
-    async def _append(self, path: str, content: str) -> ToolResult:
+    def _append(self, path: str, content: str) -> ToolResult:
         if not path:
             return ToolResult(success=False, error="path is required")
         p = _resolve_path(path)
@@ -536,6 +592,15 @@ class FileTool(Tool):
             return ToolResult(success=False, error=f"File not found: {path}")
         if not p.is_file():
             return ToolResult(success=False, error=f"Not a file: {path}")
+        size = p.stat().st_size
+        if size + len(content) > settings.max_file_write_bytes:
+            return ToolResult(
+                success=False,
+                error=(
+                    f"Append would exceed the {settings.max_file_write_bytes} "
+                    f"byte write limit ({size + len(content)} bytes)."
+                ),
+            )
         with p.open("a", encoding="utf-8") as f:
             f.write(content)
         return ToolResult(
@@ -543,7 +608,7 @@ class FileTool(Tool):
             data={"message": f"Appended {len(content)} characters to {p.name}", "path": str(p)},
         )
 
-    async def _mkdir(self, path: str) -> ToolResult:
+    def _mkdir(self, path: str) -> ToolResult:
         if not path:
             return ToolResult(success=False, error="path is required")
         p = _resolve_path(path)
@@ -553,14 +618,18 @@ class FileTool(Tool):
             data={"message": f"Folder ready: {p}", "path": str(p)},
         )
 
-    async def _list(self, path: str) -> ToolResult:
+    def _list(self, path: str) -> ToolResult:
         if not path:
             path = "."
         p = _resolve_path(path)
         if not p.is_dir():
             return ToolResult(success=False, error=f"Not a directory: {path}")
         items = []
+        truncated = False
         for entry in sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            if len(items) >= settings.max_list_items:
+                truncated = True
+                break
             items.append(
                 {
                     "name": entry.name,
@@ -568,15 +637,19 @@ class FileTool(Tool):
                     "size": entry.stat().st_size if entry.is_file() else None,
                 }
             )
+        data = {"path": str(p), "items": items}
+        if truncated:
+            data["truncated"] = True
         return ToolResult(
             success=True,
-            data={"path": str(p), "items": items},
+            data=data,
         )
 
-    async def _search(self, pattern: str) -> ToolResult:
+    def _search(self, pattern: str) -> ToolResult:
         if not pattern:
             return ToolResult(success=False, error="pattern is required")
         matches = []
+        truncated = False
         for base in _allowed_bases():
             base_str = str(base.resolve())
             for match in glob_module.iglob(
@@ -591,17 +664,25 @@ class FileTool(Tool):
                             "size": m.stat().st_size if m.is_file() else None,
                         }
                     )
+                    if len(matches) >= settings.max_search_results:
+                        truncated = True
+                        break
+            if truncated:
+                break
         matches.sort(key=lambda x: x["path"])
+        data = {
+            "pattern": pattern,
+            "matches": matches,
+            "count": len(matches),
+        }
+        if truncated:
+            data["truncated"] = True
         return ToolResult(
             success=True,
-            data={
-                "pattern": pattern,
-                "matches": matches,
-                "count": len(matches),
-            },
+            data=data,
         )
 
-    async def _rename(self, path: str, new_name: str) -> ToolResult:
+    def _rename(self, path: str, new_name: str) -> ToolResult:
         if not path or not new_name:
             return ToolResult(success=False, error="Both path and new_name are required")
         src = _resolve_path(path)
@@ -618,7 +699,7 @@ class FileTool(Tool):
             data={"message": f"Renamed to {dst.name}", "from": str(src), "to": str(dst)},
         )
 
-    async def _delete(self, path: str, confirmed: bool) -> ToolResult:
+    def _delete(self, path: str, confirmed: bool) -> ToolResult:
         if not path:
             return ToolResult(success=False, error="path is required")
         p = _resolve_path(path)
@@ -638,7 +719,13 @@ class FileTool(Tool):
             )
 
         if p.is_dir():
-            p.rmdir()
+            try:
+                p.rmdir()
+            except OSError:
+                return ToolResult(
+                    success=False,
+                    error=f"Cannot delete '{path}': directory is not empty",
+                )
         else:
             p.unlink()
         return ToolResult(

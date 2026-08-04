@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import ClassVar
 
 from app.tools.base import Tool, ToolResult
 from app.tools.registry import ToolRegistry
@@ -8,7 +9,7 @@ from app.tools.registry import ToolRegistry
 class TimeTool(Tool):
     name = "time"
     description = "Returns the current local time, date, and timezone"
-    parameters = {}
+    parameters: ClassVar[dict] = {}
 
     async def execute(self, **kwargs) -> ToolResult:
         now = datetime.now().astimezone()

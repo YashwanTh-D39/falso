@@ -1,13 +1,5 @@
-from datetime import datetime, timezone
-
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
-    prompt: str
-
-
-class ChatResponse(BaseModel):
-    response: str
-    model: str
-    timestamp: str = datetime.now(timezone.utc).isoformat()
+    prompt: str = Field(min_length=1, max_length=50_000)

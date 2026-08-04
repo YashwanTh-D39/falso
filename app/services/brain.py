@@ -3,14 +3,15 @@ import logging
 
 import httpx
 
-from config.settings import settings
+# Tool modules self-register with ToolRegistry on import; importing them here
+# guarantees every tool is available to chat routing.
+import app.tools.file_tool
+import app.tools.system_tool
+import app.tools.time_tool  # noqa: F401 — registers TimeTool
 from app.services.context import ConversationContext
 from app.tools.manager import ToolManager
 from app.tools.registry import ToolRegistry
-
-import app.tools.time_tool    # noqa: F401 — registers time tool
-import app.tools.system_tool  # noqa: F401 — registers system tool
-import app.tools.file_tool    # noqa: F401 — registers file tool
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -72,49 +73,42 @@ class BrainService:
         if self.context.has_pending:
             action = self.context.pending
 
-            # Check expiry
-            if action.expired:
-                logger.debug("Pending action expired | tool=%s intent=%s age=%.1fs",
-                             action.tool, action.intent, 300.0 - action.remaining_seconds())
+            clean = prompt_lower.strip(".,!?;:")
+            affirmative_keywords = {"yes", "y", "yeah", "yep", "sure", "ok", "okay",
+                                    "do it", "continue", "go ahead", "proceed", "confirm"}
+            negative_keywords = {"no", "n", "nope", "cancel", "stop", "never mind", "dont", "don't", "forget it"}
+
+            is_affirmative = (
+                clean in affirmative_keywords
+                or any(w in clean for w in ("do it", "go ahead"))
+            )
+            is_negative = (
+                clean in negative_keywords
+                or any(clean.startswith(w) for w in ("no", "nope", "cancel", "stop"))
+                or any(w in clean for w in ("never mind", "forget it"))
+            )
+
+            if is_affirmative:
+                response_text = await self._execute_pending()
+                yield json.dumps({
+                    "model": self.model,
+                    "response": response_text,
+                    "done": True,
+                }) + "\n"
+                return
+
+            if is_negative:
+                logger.debug("Pending action cancelled | tool=%s intent=%s",
+                             action.tool, action.intent)
                 self.context.clear_pending()
-            else:
-                clean = prompt_lower.strip(".,!?;:")
-                affirmative_keywords = {"yes", "y", "yeah", "yep", "sure", "ok", "okay",
-                                        "do it", "continue", "go ahead", "proceed", "confirm"}
-                negative_keywords = {"no", "n", "nope", "cancel", "stop", "never mind", "dont", "don't", "forget it"}
+                yield json.dumps({
+                    "model": self.model,
+                    "response": "Cancelled.",
+                    "done": True,
+                }) + "\n"
+                return
 
-                is_affirmative = (
-                    clean in affirmative_keywords
-                    or any(clean == w for w in ("proceed", "continue", "confirm"))
-                    or any(w in clean for w in ("do it", "go ahead"))
-                )
-                is_negative = (
-                    clean in negative_keywords
-                    or any(clean.startswith(w) for w in ("no", "nope", "cancel", "stop"))
-                    or any(w in clean for w in ("never mind", "forget it"))
-                )
-
-                if is_affirmative:
-                    response_text = await self._execute_pending()
-                    yield json.dumps({
-                        "model": self.model,
-                        "response": response_text,
-                        "done": True,
-                    }) + "\n"
-                    return
-
-                if is_negative:
-                    logger.debug("Pending action cancelled | tool=%s intent=%s",
-                                 action.tool, action.intent)
-                    self.context.clear_pending()
-                    yield json.dumps({
-                        "model": self.model,
-                        "response": "Cancelled.",
-                        "done": True,
-                    }) + "\n"
-                    return
-
-                # Unrelated message — keep pending action alive, fall through to normal routing
+            # Unrelated message — keep pending action alive, fall through to normal routing
 
         # ── Phase 1: Route to a registered tool ──
         for tool_def in ToolRegistry.list():
@@ -187,8 +181,8 @@ class BrainService:
         if self.system_prompt:
             messages.append({"role": "system", "content": self.system_prompt})
         messages.append({"role": "user", "content": prompt_stripped})
-        async with httpx.AsyncClient(timeout=300) as client:
-            async with client.stream(
+        try:
+            async with httpx.AsyncClient(timeout=300) as client, client.stream(
                 "POST",
                 f"{self.base_url}/api/chat",
                 json={"model": self.model, "messages": messages, "stream": True},
@@ -201,9 +195,26 @@ class BrainService:
                 async for line in resp.aiter_lines():
                     if not line.strip():
                         continue
-                    data = json.loads(line)
+                    try:
+                        data = json.loads(line)
+                    except (json.JSONDecodeError, ValueError):
+                        # A single malformed line must never kill the whole
+                        # stream (proxy corruption, mid-line flush, etc.).
+                        logger.debug("Skipping malformed Ollama line: %r", line[:200])
+                        continue
+                    if not isinstance(data, dict):
+                        logger.debug("Skipping non-object Ollama line: %r", line[:200])
+                        continue
                     yield json.dumps({
                         "model": data.get("model"),
                         "response": data.get("message", {}).get("content", ""),
                         "done": data.get("done", False),
                     }) + "\n"
+        except httpx.RequestError as e:
+            logger.warning("Ollama connection failed: %s", e)
+            yield json.dumps({"error": f"Ollama connection failed: {e}"}) + "\n"
+        except Exception as e:
+            # Keep the stream alive with an error line instead of aborting
+            # mid-response with no explanation.
+            logger.exception("Unexpected error streaming from Ollama")
+            yield json.dumps({"error": f"Ollama error: {e}"}) + "\n"

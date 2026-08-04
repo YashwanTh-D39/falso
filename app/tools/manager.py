@@ -14,9 +14,6 @@ class ToolManager:
     def __init__(self, registry: ToolRegistry | None = None) -> None:
         self.registry = registry or ToolRegistry
 
-    def get_tool_schemas(self) -> list[dict[str, str]]:
-        return self.registry.list()
-
     async def execute(self, name: str, **kwargs: Any) -> ToolResult:
         tool_cls = self.registry.get(name)
         if tool_cls is None:

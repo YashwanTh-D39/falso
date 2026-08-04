@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
     from app.tools.base import Tool
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class ToolRegistry:
-    _tools: dict[str, type[Tool]] = {}
+    _tools: ClassVar[dict[str, type[Tool]]] = {}
 
     @classmethod
     def register(cls, tool_cls: type[Tool]) -> type[Tool]:
@@ -40,7 +40,3 @@ class ToolRegistry:
             }
             for t in cls._tools.values()
         ]
-
-    @classmethod
-    def clear(cls) -> None:
-        cls._tools.clear()
