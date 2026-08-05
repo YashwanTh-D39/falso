@@ -2137,9 +2137,25 @@
   const micToggle = document.getElementById('micToggle');
   analyser = null; micStream = null; micActive = false; freqData = null;
 
+  /* ─── Voice Audio Queue & Barge-in ─── */
+  let currentAudioSource = null;
+  let audioPlayQueue = [];
+
+  function stopActiveAudioPlayback() {
+    if (currentAudioSource) {
+      try { currentAudioSource.stop(); } catch(e) {}
+      currentAudioSource = null;
+    }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    audioPlayQueue = [];
+  }
+
   async function enableMic(){
     try{
-      micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+      stopActiveAudioPlayback();
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const src = audioCtx.createMediaStreamSource(micStream);
       analyser = audioCtx.createAnalyser();

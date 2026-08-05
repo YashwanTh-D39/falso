@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     # cost of monitoring is zero regardless of the frontend poll rate.
     gpu_refresh_interval_seconds: float = Field(default=5.0, gt=0.0)
 
+    # ElevenLabs Voice Integration
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
+    elevenlabs_model_id: str = "eleven_monolingual_v1"
+
     # File Tool limits
     file_tool_workspace: str = ""
     max_file_read_bytes: int = 1_000_000

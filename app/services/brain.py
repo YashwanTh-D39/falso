@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -51,6 +52,9 @@ class BrainService:
             ),
         )
         self.context = ConversationContext()
+        self.last_first_token_latency: float = 0.0
+        self.last_tool_latency: float = 0.0
+        self.last_memory_latency: float = 0.0
 
     def _load_system_prompt(self) -> str | None:
         try:
@@ -224,11 +228,17 @@ class BrainService:
                 messages.append({"role": msg.role, "content": msg.content})
 
         messages.append({"role": "user", "content": prompt_stripped})
+        start_time = time.perf_counter()
+        first_token_received = False
         try:
             # stream_chat is a provider-agnostic async generator; each vendor
             # maps these OpenAI-style messages to its native request.
             async for chunk in self.provider.stream_chat(messages):
                 if chunk.text:
+                    if not first_token_received:
+                        self.last_first_token_latency = time.perf_counter() - start_time
+                        first_token_received = True
+                        logger.info("First LLM token received in %.3fs", self.last_first_token_latency)
                     yield json.dumps({
                         "model": self.model,
                         "response": chunk.text,

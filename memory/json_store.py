@@ -36,6 +36,7 @@ class JSONMemoryStore(BaseMemoryStore):
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._memories: dict[str, MemoryEntry] = {}
+        self._doc_tokens: dict[str, list[str]] = {}
         self._load()
 
     def _load(self) -> None:
@@ -51,8 +52,10 @@ class JSONMemoryStore(BaseMemoryStore):
                     created_at=item.get("created_at", ""),
                 )
                 self._memories[entry.id] = entry
+                self._doc_tokens[entry.id] = _tokenize(entry.content)
         except Exception:  # noqa: BLE001
             self._memories = {}
+            self._doc_tokens = {}
 
     def _save(self) -> None:
         data = [
@@ -70,8 +73,10 @@ class JSONMemoryStore(BaseMemoryStore):
 
     def add(self, content: str, metadata: dict[str, Any] | None = None) -> MemoryEntry:
         entry = MemoryEntry(content=content.strip(), metadata=metadata or {})
+        tokens = _tokenize(entry.content)
         with self._lock:
             self._memories[entry.id] = entry
+            self._doc_tokens[entry.id] = tokens
             self._save()
         return entry
 
@@ -86,7 +91,7 @@ class JSONMemoryStore(BaseMemoryStore):
 
         # Document count
         n_docs = len(memories)
-        doc_tokens_list = [_tokenize(m.content) for m in memories]
+        doc_tokens_list = [self._doc_tokens.get(m.id, []) for m in memories]
         
         # Calculate IDF
         doc_freq: dict[str, int] = Counter()
@@ -121,6 +126,7 @@ class JSONMemoryStore(BaseMemoryStore):
         with self._lock:
             if memory_id in self._memories:
                 del self._memories[memory_id]
+                self._doc_tokens.pop(memory_id, None)
                 self._save()
                 return True
             return False

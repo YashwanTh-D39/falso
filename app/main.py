@@ -11,6 +11,7 @@ from app.routes.brain import router as brain_router
 from app.routes.conversations import router as conversations_router
 from app.routes.system import router as system_router
 from app.routes.tools import router as tools_router
+from app.routes.voice import router as voice_router
 from app.services.system_monitor import system_monitor
 from config.logging import setup_logging
 from config.settings import settings
@@ -66,11 +67,11 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Falso-Token"],
 )
 
-
 app.include_router(brain_router)
 app.include_router(conversations_router)
 app.include_router(tools_router)
 app.include_router(system_router)
+app.include_router(voice_router)
 
 
 @app.get("/health")
