@@ -18,13 +18,27 @@ from typing import Any
 from app.providers.base import AIProviderError, BaseAIProvider
 from app.providers.gemini import GeminiProvider
 from app.providers.ollama import OllamaProvider
-from app.providers.openai import OpenAIProvider
 
 logger = logging.getLogger(__name__)
 
 
 class UnknownProviderError(AIProviderError):
     """Raised when ``AI_PROVIDER`` names a provider that is not registered."""
+
+
+def _build_openai_provider(s: Any) -> BaseAIProvider:
+    try:
+        from app.providers.openai import OpenAIProvider
+
+        return OpenAIProvider(
+            model=getattr(s, "openai_model", "gpt-4o"),
+            api_key=getattr(s, "openai_api_key", ""),
+            base_url=getattr(s, "openai_base_url", None),
+        )
+    except ImportError as exc:
+        raise AIProviderError(
+            "OpenAI provider requires optional dependency: pip install falso[openai]"
+        ) from exc
 
 
 #: provider name -> factory that maps a settings-like object to an instance.
@@ -39,11 +53,7 @@ build = {
         model=s.ollama_model,
         base_url=s.ollama_base_url,
     ),
-    "openai": lambda s: OpenAIProvider(
-        model=getattr(s, "openai_model", "gpt-4o"),
-        api_key=getattr(s, "openai_api_key", ""),
-        base_url=getattr(s, "openai_base_url", None),
-    ),
+    "openai": _build_openai_provider,
 }
 
 
