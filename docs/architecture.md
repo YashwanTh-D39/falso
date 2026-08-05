@@ -53,6 +53,7 @@ single-page frontend and streams chat through a pluggable **AI provider layer**
 | Middleware | `app/middleware/security.py` | Auth, origin validation, two-layer body limits, security headers. Never blocks the event loop. |
 | Routes | `app/routes/` | Thin HTTP adapters — parse, validate, delegate. No business logic. |
 | Services | `app/services/` | `BrainService` (chat routing), `SystemMonitor` (background metrics), `ConversationContext` (state). |
+| **Memory Subsystem** | `memory/` | `BaseMemoryStore` interface, `JSONMemoryStore` (hybrid vector/TF-IDF), `ChromaMemoryStore` (ChromaDB), `CloudMemoryStore`, `MemoryService`. |
 | **AI providers** | `app/providers/` | `BaseAIProvider` contract, `OpenAIProvider` (Responses API), `OllamaProvider`, `build_provider()` factory. |
 | Tools | `app/tools/` | `ToolRegistry` (class registry), `ToolManager` (execution + timing), tool implementations. |
 | Config | `config/` | `Settings` (pydantic-settings, `.env`), logging setup, system prompt. |

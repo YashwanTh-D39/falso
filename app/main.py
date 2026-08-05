@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from app.middleware.security import SecurityMiddleware
 from app.routes.brain import router as brain_router
 from app.routes.conversations import router as conversations_router
+from app.routes.memory import router as memory_router
 from app.routes.system import router as system_router
 from app.routes.tools import router as tools_router
 from app.routes.voice import router as voice_router
@@ -69,6 +70,7 @@ app.add_middleware(
 
 app.include_router(brain_router)
 app.include_router(conversations_router)
+app.include_router(memory_router)
 app.include_router(tools_router)
 app.include_router(system_router)
 app.include_router(voice_router)

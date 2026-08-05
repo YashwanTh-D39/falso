@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from memory.base import BaseMemoryStore, MemoryEntry, MemorySearchResult
+from memory.embeddings import SimpleVectorEmbeddingModel, _cosine_similarity
 
 
 def _tokenize(text: str) -> list[str]:
@@ -24,7 +25,7 @@ def _compute_tf(tokens: list[str]) -> dict[str, float]:
 
 
 class JSONMemoryStore(BaseMemoryStore):
-    """File-backed JSON memory store with lightweight TF-IDF search.
+    """File-backed JSON memory store with hybrid semantic vector + TF-IDF search.
     Requires no external dependencies.
     """
 
@@ -37,6 +38,8 @@ class JSONMemoryStore(BaseMemoryStore):
         self._lock = threading.Lock()
         self._memories: dict[str, MemoryEntry] = {}
         self._doc_tokens: dict[str, list[str]] = {}
+        self._embeddings: dict[str, list[float]] = {}
+        self.embedder = SimpleVectorEmbeddingModel()
         self._load()
 
     def _load(self) -> None:
@@ -53,9 +56,11 @@ class JSONMemoryStore(BaseMemoryStore):
                 )
                 self._memories[entry.id] = entry
                 self._doc_tokens[entry.id] = _tokenize(entry.content)
+                self._embeddings[entry.id] = self.embedder.embed_text(entry.content)
         except Exception:  # noqa: BLE001
             self._memories = {}
             self._doc_tokens = {}
+            self._embeddings = {}
 
     def _save(self) -> None:
         data = [
@@ -74,9 +79,11 @@ class JSONMemoryStore(BaseMemoryStore):
     def add(self, content: str, metadata: dict[str, Any] | None = None) -> MemoryEntry:
         entry = MemoryEntry(content=content.strip(), metadata=metadata or {})
         tokens = _tokenize(entry.content)
+        embedding = self.embedder.embed_text(entry.content)
         with self._lock:
             self._memories[entry.id] = entry
             self._doc_tokens[entry.id] = tokens
+            self._embeddings[entry.id] = embedding
             self._save()
         return entry
 
@@ -85,6 +92,7 @@ class JSONMemoryStore(BaseMemoryStore):
         if not query_tokens or not self._memories:
             return []
 
+        query_vector = self.embedder.embed_text(query)
         results: list[MemorySearchResult] = []
         with self._lock:
             memories = list(self._memories.values())
@@ -104,20 +112,23 @@ class JSONMemoryStore(BaseMemoryStore):
 
         for i, entry in enumerate(memories):
             doc_tokens = doc_tokens_list[i]
-            if not doc_tokens:
-                continue
-            doc_tf = _compute_tf(doc_tokens)
+            doc_emb = self._embeddings.get(entry.id, [])
             
-            # Dot product of query & document TF-IDF vectors
-            score = 0.0
-            for word, q_tf in query_tf.items():
-                if word in doc_tf:
-                    df = doc_freq.get(word, 1)
-                    idf = math.log((n_docs + 1) / (df + 0.5)) + 1.0
-                    score += q_tf * doc_tf[word] * (idf ** 2)
+            # Hybrid scoring: TF-IDF + Cosine Similarity
+            vector_sim = _cosine_similarity(query_vector, doc_emb) if doc_emb else 0.0
+            
+            tfidf_score = 0.0
+            if doc_tokens:
+                doc_tf = _compute_tf(doc_tokens)
+                for word, q_tf in query_tf.items():
+                    if word in doc_tf:
+                        df = doc_freq.get(word, 1)
+                        idf = math.log((n_docs + 1) / (df + 0.5)) + 1.0
+                        tfidf_score += q_tf * doc_tf[word] * (idf ** 2)
 
-            if score > 0.0:
-                results.append(MemorySearchResult(entry=entry, score=score))
+            total_score = tfidf_score + (vector_sim * 2.0)
+            if total_score > 0.05:
+                results.append(MemorySearchResult(entry=entry, score=total_score))
 
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:limit]
@@ -127,6 +138,7 @@ class JSONMemoryStore(BaseMemoryStore):
             if memory_id in self._memories:
                 del self._memories[memory_id]
                 self._doc_tokens.pop(memory_id, None)
+                self._embeddings.pop(memory_id, None)
                 self._save()
                 return True
             return False
