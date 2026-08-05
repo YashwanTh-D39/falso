@@ -55,7 +55,8 @@ def _read_file(conv_id: str) -> dict | None:
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        val = json.loads(path.read_text(encoding="utf-8"))
+        return val if isinstance(val, dict) else None
     except (OSError, ValueError):
         logger.warning("Unreadable conversation file: %s", path)
         return None
