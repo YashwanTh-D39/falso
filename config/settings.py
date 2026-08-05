@@ -17,10 +17,44 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
-    # Ollama
+    # AI provider
+    # Backend that powers free-form chat (Phase 2 of BrainService). The UI and
+    # the Brain service are provider-agnostic: this value only selects which
+    # class the provider factory instantiates. Options:
+    #   openai  (default — OpenAI, cloud)
+    #   ollama  (optional — local Ollama)
+    # Future: claude, deepseek (add a provider class + factory entry).
+    ai_provider: str = "openai"
+    ai_timeout_seconds: float = Field(default=300.0, gt=0.0)
+    ai_max_retries: int = Field(default=3, ge=0)
+    # Maximum number of conversation history messages forwarded to the LLM.
+    # Older messages beyond this window are dropped to prevent token overflow.
+    max_history_messages: int = Field(default=50, ge=1)
+
+    # OpenAI (default provider)
+    # API key from https://platform.openai.com/api-keys. Read server-side
+    # only — never sent to the browser. Leave empty to get a clear error in
+    # the chat stream instead of a crash.
+    openai_api_key: str = ""
+    openai_model: str = "gpt-5"
+    # Optional base URL override (OpenAI-compatible gateways / proxies).
+    openai_base_url: str = ""
+
+    # Ollama (optional local provider — used when AI_PROVIDER=ollama)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:3b"
+
     system_prompt_path: str = "./config/system_prompt.txt"
+
+    # Personality engine
+    # Personality used to build the system prompt at request time. Options:
+    # default, technician, ultron, jarvis, minimal, friendly. The Personality
+    # Engine (app/personality/) is the only producer of the system prompt; it
+    # never routes tools, calls the LLM, or manages memory.
+    assistant_personality: str = "default"
+    # User preferences folded into the generated system prompt.
+    user_language: str = "English"
+    user_verbosity: str = "concise"
 
     # Security
     # Optional bearer token required for all /api/* requests. Empty = no token.

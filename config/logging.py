@@ -10,4 +10,5 @@ def setup_logging() -> None:
         format="%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d — %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         stream=sys.stdout,
+        force=True,
     )

@@ -90,7 +90,7 @@ Each line is a JSON object. Event types:
 **Token/response chunks** (LLM streaming):
 
 ```json
-{ "model": "qwen2.5:3b", "response": "The current time is ", "done": false }
+{ "model": "gpt-5", "response": "The current time is ", "done": false }
 ```
 
 **Tool start notification** (before a tool executes):
@@ -102,20 +102,23 @@ Each line is a JSON object. Event types:
 **Final response** — a `done: true` line always ends the stream:
 
 ```json
-{ "model": "qwen2.5:3b", "response": "The current time is 12:34:56.", "done": true }
+{ "model": "gpt-5", "response": "The current time is 12:34:56.", "done": true }
 ```
 
 For tool results the final `done` line contains the formatted tool result.
 
-**Error** (e.g. Ollama unreachable, or a connection failure mid-stream):
+**Error** (e.g. provider unreachable, invalid key, or a connection failure
+mid-stream):
 
 ```json
-{ "error": "Ollama connection failed: ..." }
+{ "error": "OpenAI connection failed: ..." }
 ```
 
-The stream is resilient: malformed or non-object lines from Ollama (or a
-proxy) are skipped, and connect/read timeouts are surfaced as an `error`
-line instead of a silently truncated stream.
+The stream is resilient: malformed or non-object lines from the provider (or
+a proxy) are skipped, and connect/read timeouts are surfaced as an `error`
+line instead of a silently truncated stream. The model name in the stream
+events reflects the configured `OPENAI_MODEL` / `OLLAMA_MODEL` (the
+`done` event of a tool turn carries the default model).
 
 ### Chat routing
 
@@ -129,8 +132,10 @@ One chat request is resolved in three phases (see
    keyword/pattern; a match streams a `tool_start` event, executes the tool,
    and ends with the formatted result. Deletions return
    `confirmation_required: true` instead of executing.
-3. **LLM fallback** — no tool match: the prompt is forwarded to Ollama
-   (`OLLAMA_MODEL` at `OLLAMA_BASE_URL/api/chat`, streaming).
+3. **LLM fallback** — no tool match: the prompt is streamed through the AI
+   provider selected by `AI_PROVIDER` — OpenAI Responses API by default
+   (`OPENAI_MODEL`), or Ollama (`OLLAMA_MODEL` at `OLLAMA_BASE_URL/api/chat`).
+   System prompt → provider `instructions`; turns → `input`.
 
 ---
 

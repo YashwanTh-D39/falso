@@ -45,6 +45,13 @@ def _relative_bases() -> list[Path]:
 
 def _check_allowed(path: Path) -> Path:
     resolved = path.resolve()
+    # Reject symlinks: a symlink inside an allowed directory could point
+    # outside the sandbox. path.resolve() follows symlinks, so we compare
+    # the resolved result to the original to detect them.
+    if path.exists() and path.is_symlink():
+        raise PermissionError(
+            f"Access denied: symlinks are not allowed ({path})"
+        )
     for base in _allowed_bases():
         try:
             resolved.relative_to(base.resolve())
@@ -55,6 +62,7 @@ def _check_allowed(path: Path) -> Path:
         f"Access denied. Path must be within one of: "
         f"{[str(b) for b in _allowed_bases()]}"
     )
+
 
 
 def _resolve_path(user_path: str) -> Path:
@@ -648,6 +656,15 @@ class FileTool(Tool):
     def _search(self, pattern: str) -> ToolResult:
         if not pattern:
             return ToolResult(success=False, error="pattern is required")
+        # Python's glob does not normalize ".." segments — a crafted pattern
+        # like "../../Windows/*.ini" would walk out of the sandbox. Reject
+        # such patterns up front, and still enforce containment per match
+        # below (defense in depth, identical rule to every other command).
+        if ".." in Path(pattern).parts:
+            return ToolResult(
+                success=False,
+                error="Search pattern is not allowed: '..' segments are prohibited",
+            )
         matches = []
         truncated = False
         for base in _allowed_bases():
@@ -655,7 +672,14 @@ class FileTool(Tool):
             for match in glob_module.iglob(
                 f"{base_str}/**/{pattern}", recursive=True
             ):
-                m = Path(match)
+                try:
+                    # Same containment rule as every other command: resolve
+                    # (follows symlinks) and require the result to stay inside
+                    # an allowed base. Matches reached via symlinks, drive
+                    # letters, or UNC paths are rejected here.
+                    m = _check_allowed(Path(match))
+                except PermissionError:
+                    continue
                 if m.is_file() or m.is_dir():
                     matches.append(
                         {

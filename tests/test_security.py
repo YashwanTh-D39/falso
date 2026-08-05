@@ -1,6 +1,7 @@
 import hmac
 import json
 import uuid
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -14,6 +15,43 @@ from app.routes.conversations import _validate_conv_id
 from config.settings import settings
 
 CHAT_TOOL_PROMPT = "what is the time now"
+
+
+class TestFrontendXssSinks:
+    """The chat UI must escape server-derived data before innerHTML.
+
+    Static-source regression tests: the frontend has no JS test harness yet, so
+    we assert the sink lines in frontend/index.html actually call escHtml().
+    These fail on the pre-patch source, which interpolated data.detail /
+    data.tool / data.action / data.model raw into innerHTML (DOM XSS via a
+    crafted prompt, e.g. `read <img src=x onerror=...>`).
+    """
+
+    FRONTEND = (Path(__file__).resolve().parent.parent / "frontend" / "index.html")
+
+    def _tool_start_block(self) -> list[str]:
+        lines = self.FRONTEND.read_text(encoding="utf-8").splitlines()
+        start = next(
+            i for i, l in enumerate(lines) if "data.type === 'tool_start'" in l
+        )
+        end = next(
+            i for i in range(start, len(lines)) if "ti.innerHTML" in lines[i]
+        )
+        return lines[start : end + 1]
+
+    def test_tool_start_detail_is_escaped(self) -> None:
+        block = self._tool_start_block()
+        assert any("escHtml(data.detail" in l for l in block)
+        assert any("escHtml((data.tool" in l for l in block)
+        assert any("escHtml((data.action" in l for l in block)
+
+    def test_model_name_is_escaped_in_sysid_sink(self) -> None:
+        line = next(
+            l
+            for l in self.FRONTEND.read_text(encoding="utf-8").splitlines()
+            if "querySelector('.sysid').innerHTML" in l
+        )
+        assert "escHtml(modelName" in line
 
 
 class TestStaticFileServing:

@@ -1,13 +1,17 @@
 # Deployment Guide
 
-Falso runs as a single process on a machine that also runs Ollama. This guide
-covers local/manual deployment and containerized deployment
-([docker.md](docker.md) for Docker specifics).
+Falso runs as a single process. Chat streams through the **OpenAI Responses
+API** by default (cloud, no local LLM required) or through a local **Ollama**
+process if you prefer a fully offline setup. This guide covers local/manual
+deployment and containerized deployment ([docker.md](docker.md) for Docker
+specifics).
 
 ## Prerequisites
 
 - **Python 3.11+** (tested on 3.14)
-- **Ollama** with the model pulled (default `qwen2.5:3b`):
+- **OpenAI API key** (default `openai` provider) — set it in `.env` as
+  `OPENAI_API_KEY`
+- **Optional** — for `AI_PROVIDER=ollama`, Ollama with the model pulled:
 
   ```bash
   ollama pull qwen2.5:3b
@@ -36,7 +40,8 @@ copy .env.example .env         # Windows
 
 ### Configuration
 
-All variables are optional — the app runs out of the box with defaults.
+All variables are optional — the app runs out of the box with defaults. Set
+`OPENAI_API_KEY` to enable chat with the default provider.
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -44,8 +49,12 @@ All variables are optional — the app runs out of the box with defaults.
 | `FASTAPI_PORT` | `8000` | Bind port |
 | `FASTAPI_DEBUG` | `true` | Enables debug output in `/health` |
 | `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama HTTP endpoint |
-| `OLLAMA_MODEL` | `qwen2.5:3b` | Chat model (must be pulled in Ollama) |
+| `AI_PROVIDER` | `openai` | Chat provider: `openai` (cloud, default) or `ollama` (local). Future: `claude`, `deepseek` |
+| `OPENAI_API_KEY` | *(empty)* | OpenAI API key (server-side only, never sent to the browser) |
+| `OPENAI_MODEL` | `gpt-5` | OpenAI model name |
+| `OPENAI_BASE_URL` | *(empty)* | Optional OpenAI-compatible gateway/proxy base URL |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama HTTP endpoint (only when `AI_PROVIDER=ollama`) |
+| `OLLAMA_MODEL` | `qwen2.5:3b` | Ollama chat model (only when `AI_PROVIDER=ollama`, must be pulled) |
 | `SYSTEM_PROMPT_PATH` | `./config/system_prompt.txt` | System prompt file; missing file = no system prompt |
 | `API_TOKEN` | *(empty)* | **Required for any non-local exposure.** Bearer token for all `/api/*` requests (constant-time comparison) |
 | `ALLOWED_ORIGINS` | `["http://localhost:8000","http://127.0.0.1:8000"]` | JSON array; cross-origin browser requests (mutating methods) are only accepted from these origins |
@@ -113,7 +122,7 @@ alongside `.env`.
 
 ## Verified stack
 
-- Python 3.14.6 (Windows) — 64 tests passing, ruff clean
+- Python 3.14.6 (Windows) — 121 tests passing, ruff clean
 - Windows PowerShell / Linux shell supported; the app is cross-platform,
   with platform-specific degradations (no temperature/battery sensors on
   some OSes → `null` in stats, no GPU → `null` GPU fields)

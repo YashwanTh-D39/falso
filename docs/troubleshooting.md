@@ -6,7 +6,29 @@ detail.
 
 ## Chat / LLM
 
-### "Ollama error: ..." in the chat stream
+### "OpenAI error: ..." or "OpenAI connection failed" in the chat stream
+
+**Cause:** `OPENAI_API_KEY` is missing/invalid, the model name is wrong, or
+the OpenAI API is unreachable.
+
+**Fix:**
+
+```bash
+# .env
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-5
+```
+
+- **401** → wrong or revoked key / insufficient credit — regenerate at
+  https://platform.openai.com/api-keys.
+- **404 model not found** → `OPENAI_MODEL` is not an available model.
+- **503 / retries exhausted** → transient overload; the SDK retries
+  automatically with backoff; if it persists, wait and retry.
+- **`OPENAI_BASE_URL` set to a gateway/proxy** → verify the endpoint
+  serves the OpenAI Responses API.
+
+### "Ollama error: ..." in the chat stream (only when `AI_PROVIDER=ollama`)
 
 **Cause:** `OLLAMA_BASE_URL` is unreachable or the model is missing.
 
@@ -24,13 +46,14 @@ point at the host (`http://host.docker.internal:11434`) — see
 
 ### Chat hangs / no response
 
-- Check `OLLAMA_BASE_URL` (a wrong port hangs or errors after the 300 s
-  timeout).
+- Check the configured provider vars: `OPENAI_BASE_URL`/`OPENAI_MODEL` (wrong
+  values error or hang until the 300 s timeout; wrong keys hang until the SDK
+  auth error).
 - Confirm the first request through the UI; watch server logs for the
   `Chat with model ...` line.
 - On slow models, responses are streamed incrementally — the UI shows a
-  typing indicator; a long first-token delay is normal for small local
-  models.
+  typing indicator; a long first-token delay is normal, especially with local
+  Ollama models.
 
 ### Tool never runs; LLM answers instead
 

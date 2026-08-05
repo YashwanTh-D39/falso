@@ -50,7 +50,7 @@ services:
 ## Quick start
 
 ```bash
-# 1. Configuration (see below — Ollama needs explicit wiring in containers)
+# 1. Configuration — for OpenAI simply set OPENAI_API_KEY in .env
 copy .env.example .env        # Windows / adjust for your shell
 
 # 2. Build and run
@@ -60,7 +60,7 @@ docker compose up --build
 # http://localhost:8000
 ```
 
-## Reaching Ollama from the container
+## Reaching Ollama from the container (only when `AI_PROVIDER=ollama`)
 
 `OLLAMA_BASE_URL` defaults to `http://localhost:11434`, which inside a
 container points at the container itself. Point it at the host's Ollama:

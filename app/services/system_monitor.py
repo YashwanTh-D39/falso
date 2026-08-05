@@ -55,6 +55,7 @@ class SystemMonitor:
         self._net_last: tuple[int, int, float] | None = None
         self._gpu_last: dict[str, Any] | None = None
         self._cpu_warmed = False
+        self._gpu_available: bool | None = None  # None = not yet tested
 
     def start(self) -> None:
         if self._task is not None:
@@ -112,12 +113,18 @@ class SystemMonitor:
         temps = self._sample_temperatures()
         battery = self._sample_battery()
         gpu = self._probe_gpu()
-        if gpu is None:
+        if gpu is not None:
+            self._gpu_available = True
+            self._gpu_last = gpu
+        elif self._gpu_available is None:
+            # First probe failed — mark GPU as unavailable so we skip
+            # subprocess spawning on all future samples.
+            self._gpu_available = False
+            gpu = {"gpu_util": None, "vram_used": None, "vram_total": None, "gpu_temp": None}
+        else:
             gpu = self._gpu_last
         if gpu is None:
             gpu = {"gpu_util": None, "vram_used": None, "vram_total": None, "gpu_temp": None}
-        else:
-            self._gpu_last = gpu
 
         # Sensors' GPU temp wins over nvidia-smi when both are available.
         if temps["gpu_temp"] is None and gpu.get("gpu_temp") is not None:
@@ -196,9 +203,12 @@ class SystemMonitor:
             logger.debug("Temperature sensors unavailable: %s", e)
         return result
 
-    @staticmethod
-    def _probe_gpu() -> dict[str, Any] | None:
-        """Blocking nvidia-smi query; may take up to _SMI_TIMEOUT seconds."""
+    def _probe_gpu(self) -> dict[str, Any] | None:
+        """Blocking nvidia-smi query; may take up to _SMI_TIMEOUT seconds.
+        Returns None if no NVIDIA GPU is available."""
+        # Skip subprocess entirely if we already know there's no GPU.
+        if self._gpu_available is False:
+            return None
         try:
             proc = subprocess.run(
                 ["nvidia-smi", _SMI_QUERY, _SMI_FORMAT],

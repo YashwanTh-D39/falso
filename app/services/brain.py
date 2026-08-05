@@ -1,13 +1,24 @@
+from __future__ import annotations
+
 import json
 import logging
+from typing import TYPE_CHECKING
 
-import httpx
+if TYPE_CHECKING:
+    from app.schemas.brain import ChatMessage
 
 # Tool modules self-register with ToolRegistry on import; importing them here
 # guarantees every tool is available to chat routing.
 import app.tools.file_tool
 import app.tools.system_tool
 import app.tools.time_tool  # noqa: F401 — registers TimeTool
+from app.personality import (
+    ConversationState,
+    PersonalityEngine,
+    RuntimeContext,
+    UserPreferences,
+)
+from app.providers import AIProviderError, BaseAIProvider, build_provider
 from app.services.context import ConversationContext
 from app.tools.manager import ToolManager
 from app.tools.registry import ToolRegistry
@@ -21,11 +32,24 @@ class BrainServiceError(Exception):
 
 
 class BrainService:
-    def __init__(self) -> None:
-        self.model = settings.ollama_model
-        self.base_url = settings.ollama_base_url
+    def __init__(
+        self,
+        personality_engine: PersonalityEngine | None = None,
+        provider: BaseAIProvider | None = None,
+    ) -> None:
+        # AI provider is injected so tests can stub it; production uses the
+        # factory, which already resolves `AI_PROVIDER` from settings.
+        self.provider = provider or build_provider(settings)
+        self.model = self.provider.model
         self.tool_manager = ToolManager()
-        self.system_prompt = self._load_system_prompt()
+        self.personality_engine = personality_engine or PersonalityEngine(
+            core_prompt=self._load_system_prompt(),
+            default_personality=settings.assistant_personality,
+            user_preferences=UserPreferences(
+                language=settings.user_language,
+                verbosity=settings.user_verbosity,
+            ),
+        )
         self.context = ConversationContext()
 
     def _load_system_prompt(self) -> str | None:
@@ -63,7 +87,7 @@ class BrainService:
                     break
         return response
 
-    async def chat(self, prompt: str):
+    async def chat(self, prompt: str, *, history: list[ChatMessage] | None = None):
         prompt_stripped = prompt.strip()
         prompt_lower = prompt_stripped.lower()
 
@@ -175,46 +199,55 @@ class BrainService:
                 }) + "\n"
                 return
 
-        # ── Phase 2: No tool matched — stream from the LLM ──
-        logger.debug("No tool matched → routing to LLM")
+        # ── Phase 2: No tool matched — stream from the AI provider ──
+        logger.debug("No tool matched → routing to AI provider %s", self.provider.name)
         messages = []
-        if self.system_prompt:
-            messages.append({"role": "system", "content": self.system_prompt})
+        system_prompt = self.personality_engine.build_prompt(
+            runtime_context=RuntimeContext(
+                model=self.model,
+                capabilities=tuple(t["name"] for t in ToolRegistry.list()),
+            ),
+            conversation_state=ConversationState(
+                last_filename=self.context.last_filename,
+                pending_tool=self.context.pending.tool if self.context.pending else None,
+                pending_intent=self.context.pending.intent if self.context.pending else None,
+            ),
+        )
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        # ── Sliding-window history truncation ──
+        if history:
+            max_msgs = settings.max_history_messages
+            truncated = history[-max_msgs:] if len(history) > max_msgs else history
+            for msg in truncated:
+                messages.append({"role": msg.role, "content": msg.content})
+
         messages.append({"role": "user", "content": prompt_stripped})
         try:
-            async with httpx.AsyncClient(timeout=300) as client, client.stream(
-                "POST",
-                f"{self.base_url}/api/chat",
-                json={"model": self.model, "messages": messages, "stream": True},
-            ) as resp:
-                if resp.status_code != 200:
-                    error_body = await resp.aread()
-                    yield json.dumps({"error": f"Ollama error: {error_body.decode()}"}) + "\n"
-                    return
-
-                async for line in resp.aiter_lines():
-                    if not line.strip():
-                        continue
-                    try:
-                        data = json.loads(line)
-                    except (json.JSONDecodeError, ValueError):
-                        # A single malformed line must never kill the whole
-                        # stream (proxy corruption, mid-line flush, etc.).
-                        logger.debug("Skipping malformed Ollama line: %r", line[:200])
-                        continue
-                    if not isinstance(data, dict):
-                        logger.debug("Skipping non-object Ollama line: %r", line[:200])
-                        continue
+            # stream_chat is a provider-agnostic async generator; each vendor
+            # maps these OpenAI-style messages to its native request.
+            async for chunk in self.provider.stream_chat(messages):
+                if chunk.text:
                     yield json.dumps({
-                        "model": data.get("model"),
-                        "response": data.get("message", {}).get("content", ""),
-                        "done": data.get("done", False),
+                        "model": self.model,
+                        "response": chunk.text,
+                        "done": False,
                     }) + "\n"
-        except httpx.RequestError as e:
-            logger.warning("Ollama connection failed: %s", e)
-            yield json.dumps({"error": f"Ollama connection failed: {e}"}) + "\n"
+            # Always terminate with a done line — the UI relies on it, and it
+            # keeps the frontend contract identical across every provider.
+            yield json.dumps({
+                "model": self.model,
+                "response": "",
+                "done": True,
+            }) + "\n"
+        except AIProviderError as e:
+            # Provider failures are user-safe and should not kill the reply:
+            # surface them as an error line inside the stream instead.
+            logger.warning("%s provider error: %s", self.provider.name, e)
+            yield json.dumps({"error": str(e)}) + "\n"
         except Exception as e:
             # Keep the stream alive with an error line instead of aborting
             # mid-response with no explanation.
-            logger.exception("Unexpected error streaming from Ollama")
-            yield json.dumps({"error": f"Ollama error: {e}"}) + "\n"
+            logger.exception("Unexpected error streaming from provider %s", self.provider.name)
+            yield json.dumps({"error": f"{self.provider.name} error: {e}"}) + "\n"

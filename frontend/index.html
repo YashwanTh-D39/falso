@@ -545,7 +545,7 @@
 <div class="corner br"></div>
 
 <div class="timestamp" id="timestamp">SYS.CLOCK — 00:00:00</div>
-<div class="sysid">FALSO // LOCAL<br>NO CLOUD REQUIRED</div>
+<div class="sysid">FALSO // STANDBY<br>AI CORE READY</div>
 
 <div class="dock-toggle-btn" id="dockToggleBtn">▶</div>
 <div class="dock open" id="leftDock">
@@ -1837,9 +1837,9 @@
             if(data.type === 'tool_start'){
               const ti = document.getElementById('toolIndicator');
               if(ti){
-                const toolName = (data.tool || '').replace(/_/g,' ').toUpperCase();
-                const act = (data.action || '').toUpperCase();
-                const detail = data.detail || '';
+                const toolName = escHtml((data.tool || '').replace(/_/g,' ').toUpperCase());
+                const act = escHtml((data.action || '').toUpperCase());
+                const detail = escHtml(data.detail || '');
                 ti.innerHTML = `<span class="spinner">◌</span> ${toolName} — ${act} ${detail ? '// '+detail : ''}`;
                 ti.classList.add('show');
               }
@@ -1855,7 +1855,7 @@
             }
             if(data.done){
               const modelName = data.model || '';
-              if(modelName) document.querySelector('.sysid').innerHTML = 'FALSO // ' + modelName.toUpperCase().replace(':','') + '<br>NO CLOUD REQUIRED';
+              if(modelName) document.querySelector('.sysid').innerHTML = 'FALSO // ' + escHtml(modelName.toUpperCase().replace(':','')) + '<br>AI CORE ONLINE';
             }
           }catch(_){}
         }

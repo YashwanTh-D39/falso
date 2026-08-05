@@ -36,7 +36,16 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await system_monitor.stop()
+
+        # Close AI provider HTTP client if it exposes aclose()
+        from app.routes.brain import brain_service
+        provider = brain_service.provider
+        if hasattr(provider, "aclose"):
+            await provider.aclose()
+
         logger.info("Falso API shutting down")
+
+
 
 
 app = FastAPI(

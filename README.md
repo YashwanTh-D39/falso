@@ -1,17 +1,19 @@
 # Falso
 
-A production-grade local AI assistant. Falso runs entirely on your machine: a
-FastAPI backend serves a single-page dark-themed chat UI, talks to a local
-Ollama model, and executes local tools (time, system info, file operations)
-from plain-language prompts.
+A production-grade AI assistant. Falso pairs a single-page dark-themed chat UI
+with a pluggable AI provider layer: a FastAPI backend streams chat responses
+from **OpenAI** by default (or your own **Ollama** instance) and executes local
+tools (time, system info, file operations) from plain-language prompts.
 
-**Version:** 0.1.0 — **Requires:** Python 3.11+, Ollama
+**Version:** 0.1.0 — **Requires:** Python 3.11+ and an OpenAI API key
+(or a local Ollama installation).
 
 ## Features
 
-- **Local chat** — streaming responses from a local Ollama model (default
-  `qwen2.5:3b`), streamed to the browser as newline-delimited JSON
-  (`text/event-stream`).
+- **AI chat** — streaming responses from a pluggable provider (`openai` by
+  default; `ollama` optional). Switch providers with the single
+  `AI_PROVIDER` config value; the UI never changes. Streams are delivered to
+  the browser as newline-delimited JSON (`text/event-stream`).
 - **Tool execution** — the assistant routes requests to built-in tools:
   - `time` — current local time, date, timezone.
   - `system` — CPU usage/model, RAM, disk, OS, hostname, battery.
@@ -42,10 +44,12 @@ multi-agent orchestration, automation.
 Prerequisites:
 
 - Python 3.11+
-- [Ollama](https://ollama.com) running locally with the model pulled:
+- An OpenAI API key (set `OPENAI_API_KEY` in `.env`). To use the optional
+  local provider instead, run [Ollama](https://ollama.com) with the model
+  pulled:
 
   ```bash
-  ollama pull qwen2.5:3b
+  ollama pull qwen2.5:3b   # only needed if AI_PROVIDER=ollama
   ```
 
 Setup:
@@ -58,9 +62,10 @@ python -m venv .venv
 
 pip install -e ".[dev]"
 
-# 2. Configure (optional — defaults work for local use)
+# 2. Configure — add your OpenAI key
 copy .env.example .env          # Windows
 # cp .env.example .env          # Linux/macOS
+# then edit .env: OPENAI_API_KEY=sk-...
 
 # 3. Run
 uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -69,9 +74,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 Open <http://localhost:8000>. The API docs (OpenAPI) are at
 <http://localhost:8000/docs>.
 
-> On Windows, Ollama also exposes the model at the default `localhost:11434`
-> which is what `OLLAMA_BASE_URL` points at. If you run the API in Docker,
-> point it at `http://host.docker.internal:11434` — see [docs/docker.md](docs/docker.md).
+> **Switching providers** — set `AI_PROVIDER=openai` (default, cloud) or
+> `AI_PROVIDER=ollama` (local). The UI and API stay identical; only the
+> provider class changes. See [docs/architecture.md](docs/architecture.md#ai-provider-layer).
 
 ## Quick start (Docker)
 
@@ -79,7 +84,8 @@ Open <http://localhost:8000>. The API docs (OpenAPI) are at
 docker compose up --build
 ```
 
-Requires `.env` (see [docs/docker.md](docs/docker.md) for the Ollama wiring).
+Requires `.env` (see [docs/docker.md](docs/docker.md); the OpenAI key is read
+from `.env` automatically via `env_file`).
 
 ## Configuration
 
@@ -91,9 +97,15 @@ for the full table):
 | --- | --- | --- |
 | `FASTAPI_HOST` / `FASTAPI_PORT` / `FASTAPI_DEBUG` | `0.0.0.0` / `8000` / `true` | Server binding |
 | `LOG_LEVEL` | `INFO` | Logging level |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
-| `OLLAMA_MODEL` | `qwen2.5:3b` | Model name |
-| `SYSTEM_PROMPT_PATH` | `./config/system_prompt.txt` | Assistant system prompt |
+| `AI_PROVIDER` | `openai` | Chat provider: `openai` (cloud, default) or `ollama` (local). Future: `claude`, `deepseek` |
+| `OPENAI_API_KEY` | *(empty)* | OpenAI key (server-side only, never exposed to the browser) |
+| `OPENAI_MODEL` | `gpt-5` | OpenAI model name |
+| `OPENAI_BASE_URL` | *(empty)* | Optional OpenAI-compatible gateway/proxy URL |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint (only when `AI_PROVIDER=ollama`) |
+| `OLLAMA_MODEL` | `qwen2.5:3b` | Ollama model name (only when `AI_PROVIDER=ollama`) |
+| `SYSTEM_PROMPT_PATH` | `./config/system_prompt.txt` | Assistant system prompt (core identity for the default personality) |
+| `ASSISTANT_PERSONALITY` | `default` | Personality used to build the system prompt: `default`, `technician`, `ultron`, `jarvis`, `minimal`, `friendly` |
+| `USER_LANGUAGE` / `USER_VERBOSITY` | `English` / `concise` | User preferences folded into the generated system prompt |
 | `API_TOKEN` | *(empty)* | Optional bearer token for `/api/*` |
 | `ALLOWED_ORIGINS` | localhost origins | CORS + origin allowlist (JSON array) |
 | `MAX_REQUEST_BYTES` | `10000000` | Max `/api/*` request body (both layers) |
@@ -109,6 +121,7 @@ for the full table):
 app/
   main.py                 FastAPI app, lifespan, middleware wiring, SPA serving
   middleware/security.py  Auth, origin checks, body limits, security headers
+  providers/              AI provider layer: base contract, OpenAI, Ollama, factory
   routes/                 brain (chat), conversations, system (stats), tools
   schemas/                Pydantic request/response models
   services/               brain.py (routing/LLM), context.py, system_monitor.py
@@ -116,7 +129,7 @@ app/
 config/                   settings (pydantic-settings), logging, system prompt
 frontend/index.html       Single-page web UI
 chats/                    Conversation JSON files (gitignored, created at runtime)
-tests/                    pytest suite (64 tests)
+tests/                    pytest suite (121 tests)
 docs/                     This documentation set
 ```
 

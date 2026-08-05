@@ -23,7 +23,7 @@ async def chat(request: ChatRequest):
         )
 
     return StreamingResponse(
-        brain_service.chat(request.prompt),
+        brain_service.chat(request.prompt, history=request.history),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

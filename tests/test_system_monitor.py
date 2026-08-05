@@ -126,7 +126,8 @@ class TestSystemMonitor:
             raise FileNotFoundError("nvidia-smi not found")
 
         monkeypatch.setattr(subprocess, "run", raise_filenotfound)
-        assert SystemMonitor._probe_gpu() is None
+        monitor = SystemMonitor(interval=60.0)
+        assert monitor._probe_gpu() is None
 
     async def test_battery_unavailable_degrades_per_field(self, monkeypatch) -> None:
         stub_psutil(monkeypatch)
