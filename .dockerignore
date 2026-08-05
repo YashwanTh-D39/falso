@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Runtime data
+chats/
+logs/
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VCS
+.git/
+.gitignore
+
+# Testing / Linting
+.coverage
+.coverage.*
+.pytest_cache/
+.ruff_cache/
+
+# Docker
+Dockerfile
+docker-compose.yml
+*.env.docker
+
+# Documentation (not needed at runtime)
+docs/
+README.md

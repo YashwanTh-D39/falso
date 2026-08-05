@@ -97,3 +97,33 @@ class TestConversationConcurrency:
         )
         data = json.loads((tmp_path / "contended.json").read_text(encoding="utf-8"))
         assert data["id"] == "contended"
+
+
+class TestConversationPagination:
+    def test_list_pagination(self, monkeypatch, tmp_path) -> None:
+        import app.routes.conversations as conv_module
+
+        monkeypatch.setattr(conv_module, "CHATS_DIR", tmp_path)
+        for i in range(15):
+            cid = f"page{i:02d}"
+            (tmp_path / f"{cid}.json").write_text(
+                f'{{"id": "{cid}", "title": "T", "createdAt": "", "updatedAt": "", "messages": []}}',
+                encoding="utf-8",
+            )
+
+        with TestClient(main_module.app) as client:
+            r1 = client.get("/api/v1/conversations/?page=1&per_page=5")
+            assert r1.status_code == 200
+            p1 = r1.json()
+            assert len(p1) == 5
+
+            r2 = client.get("/api/v1/conversations/?page=2&per_page=5")
+            assert r2.status_code == 200
+            p2 = r2.json()
+            assert len(p2) == 5
+
+            # Non-overlapping items between page 1 and page 2
+            ids1 = {x["id"] for x in p1}
+            ids2 = {x["id"] for x in p2}
+            assert len(ids1.intersection(ids2)) == 0
+

@@ -70,23 +70,24 @@ class OpenAIProvider(BaseAIProvider):
         self.api_key = api_key or ""
         self.base_url = (base_url or "").strip() or None
         self._client: AsyncOpenAI | None = None
-        # A single in-flight stream per provider instance (module docstring).
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
 
     # ── Client lifecycle ─────────────────────────────────────────────────
 
     def _get_client(self) -> AsyncOpenAI:
         """Build the SDK client lazily (must not exist when the key is empty)."""
         if self._client is None:
+            from config.settings import settings
             kwargs = {
                 "api_key": self.api_key,
-                "max_retries": CONNECT_RETRIES,
-                "timeout": REQUEST_TIMEOUT,
+                "max_retries": settings.ai_max_retries,
+                "timeout": settings.ai_timeout_seconds,
             }
             if self.base_url:
                 kwargs["base_url"] = self.base_url
             self._client = AsyncOpenAI(**kwargs)
         return self._client
+
 
     # ── Neutral messages -> Responses API request ────────────────────────
 
@@ -154,6 +155,8 @@ class OpenAIProvider(BaseAIProvider):
         # Single-flight: another chat turn can keep its stream running, but a
         # second request simply waits here rather than piling up a queue at
         # the vendor. Best-effort the 503/queue-full class of problems.
+        if self._lock is None:
+            self._lock = asyncio.Lock()
         async with self._lock:
             try:
                 async with client.responses.stream(

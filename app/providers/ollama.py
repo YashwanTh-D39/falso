@@ -44,7 +44,9 @@ class OllamaProvider(BaseAIProvider):
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=TIMEOUT)
+            from config.settings import settings
+            timeout = httpx.Timeout(settings.ai_timeout_seconds, connect=5.0, read=30.0)
+            self._client = httpx.AsyncClient(timeout=timeout)
         return self._client
 
     async def aclose(self) -> None:

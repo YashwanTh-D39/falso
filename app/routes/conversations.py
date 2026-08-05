@@ -117,7 +117,7 @@ def _mtime_or_zero(path: Path) -> float:
         return 0.0
 
 
-def _list_files() -> list[dict]:
+def _list_files(*, offset: int = 0, limit: int = 50) -> list[dict]:
     items: list[dict] = []
     for f in sorted(
         CHATS_DIR.glob("*.json"),
@@ -136,13 +136,23 @@ def _list_files() -> list[dict]:
             "createdAt": data.get("createdAt", ""),
             "updatedAt": data.get("updatedAt", ""),
         })
-    return items
+    return items[offset:offset + limit]
 
 
 @router.get("/")
-async def list_conversations():
+async def list_conversations(page: int = 1, per_page: int = 50):
+    if page < 1:
+        page = 1
+    if per_page < 1:
+        per_page = 1
+    elif per_page > 200:
+        per_page = 200
+    offset = (page - 1) * per_page
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_CHAT_EXECUTOR, _list_files)
+    return await loop.run_in_executor(
+        _CHAT_EXECUTOR, lambda: _list_files(offset=offset, limit=per_page)
+    )
+
 
 
 @router.get("/{conv_id}")

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # FastAPI
     fastapi_host: str = "0.0.0.0"
     fastapi_port: int = 8000
-    fastapi_debug: bool = True
+    fastapi_debug: bool = False
 
     # Logging
     log_level: str = "INFO"
