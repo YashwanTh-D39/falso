@@ -18,26 +18,28 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # AI provider
-    # Backend that powers free-form chat (Phase 2 of BrainService). The UI and
-    # the Brain service are provider-agnostic: this value only selects which
-    # class the provider factory instantiates. Options:
-    #   openai  (default — OpenAI, cloud)
+    # Backend that powers free-form chat. The UI and Brain service are
+    # provider-agnostic: this value selects which class the provider factory
+    # instantiates. Options:
+    #   gemini  (default — Google AI Studio / Gemini API)
     #   ollama  (optional — local Ollama)
-    # Future: claude, deepseek (add a provider class + factory entry).
-    ai_provider: str = "openai"
+    #   openai  (optional — OpenAI, cloud)
+    ai_provider: str = "gemini"
     ai_timeout_seconds: float = Field(default=300.0, gt=0.0)
     ai_max_retries: int = Field(default=3, ge=0)
     # Maximum number of conversation history messages forwarded to the LLM.
     # Older messages beyond this window are dropped to prevent token overflow.
     max_history_messages: int = Field(default=50, ge=1)
 
-    # OpenAI (default provider)
-    # API key from https://platform.openai.com/api-keys. Read server-side
-    # only — never sent to the browser. Leave empty to get a clear error in
-    # the chat stream instead of a crash.
+    # Gemini (default primary AI provider — Google AI Studio / Gemini API)
+    # API key from https://aistudio.google.com/app/apikey.
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+
+    # OpenAI (optional provider — used when AI_PROVIDER=openai)
     openai_api_key: str = ""
-    openai_model: str = "gpt-5"
-    # Optional base URL override (OpenAI-compatible gateways / proxies).
+    openai_model: str = "gpt-4o"
     openai_base_url: str = ""
 
     # Ollama (optional local provider — used when AI_PROVIDER=ollama)

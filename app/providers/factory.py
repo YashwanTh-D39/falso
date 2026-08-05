@@ -16,6 +16,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app.providers.base import AIProviderError, BaseAIProvider
+from app.providers.gemini import GeminiProvider
 from app.providers.ollama import OllamaProvider
 from app.providers.openai import OpenAIProvider
 
@@ -29,21 +30,26 @@ class UnknownProviderError(AIProviderError):
 #: provider name -> factory that maps a settings-like object to an instance.
 #: Wrong config fails here at startup, so the server never streams errors.
 build = {
-    "openai": lambda s: OpenAIProvider(
-        model=s.openai_model,
-        api_key=s.openai_api_key,
-        base_url=getattr(s, "openai_base_url", None),
+    "gemini": lambda s: GeminiProvider(
+        model=getattr(s, "gemini_model", "gemini-2.5-flash"),
+        api_key=getattr(s, "gemini_api_key", ""),
+        base_url=getattr(s, "gemini_base_url", None),
     ),
     "ollama": lambda s: OllamaProvider(
         model=s.ollama_model,
         base_url=s.ollama_base_url,
+    ),
+    "openai": lambda s: OpenAIProvider(
+        model=getattr(s, "openai_model", "gpt-4o"),
+        api_key=getattr(s, "openai_api_key", ""),
+        base_url=getattr(s, "openai_base_url", None),
     ),
 }
 
 
 def build_provider(settings: Any) -> BaseAIProvider:
     """Instantiate the provider named by ``settings.ai_provider``."""
-    name = (settings.ai_provider or "openai").strip().lower() or "openai"
+    name = (getattr(settings, "ai_provider", "gemini") or "gemini").strip().lower() or "gemini"
     factory: Callable[[Any], BaseAIProvider] | None = build.get(name)
     if factory is None:
         raise UnknownProviderError(

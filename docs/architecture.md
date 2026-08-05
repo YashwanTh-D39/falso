@@ -26,8 +26,9 @@ single-page frontend and streams chat through a pluggable **AI provider layer**
 │   / (SPA fallback)      frontend/index.html                     │
 │                                                                │
 │  AI provider layer (app/providers/):                            │
-│   BaseAIProvider (contract) → OpenAIProvider (default)          │
-│                            → OllamaProvider (optional)          │
+│   BaseAIProvider (contract) → GeminiProvider (primary default)   │
+│                            → OllamaProvider (optional local)    │
+│                            → OpenAIProvider (optional cloud)    │
 │   factory.build_provider() selects via AI_PROVIDER              │
 │                                                                │
 │  Services:                                                      │

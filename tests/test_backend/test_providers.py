@@ -302,7 +302,10 @@ class TestOllamaStreaming:
 class _FakeSettings:
     def __init__(self, **kwargs) -> None:
         defaults = {
-            "ai_provider": "openai",
+            "ai_provider": "gemini",
+            "gemini_model": "gemini-2.5-flash",
+            "gemini_api_key": "KEY",
+            "gemini_base_url": "https://generativelanguage.googleapis.com/v1beta",
             "openai_model": "OAI-M",
             "openai_api_key": "KEY",
             "openai_base_url": "",
@@ -315,10 +318,11 @@ class _FakeSettings:
 
 
 class TestProviderFactory:
-    def test_builds_openai_by_default(self) -> None:
+    def test_builds_gemini_by_default(self) -> None:
+        from app.providers.gemini import GeminiProvider
         provider = build_provider(_FakeSettings())
-        assert isinstance(provider, OpenAIProvider)
-        assert provider.model == "OAI-M"
+        assert isinstance(provider, GeminiProvider)
+        assert provider.model == "gemini-2.5-flash"
 
     def test_builds_openai_explicit(self) -> None:
         provider = build_provider(_FakeSettings(ai_provider="openai", openai_model="gpt-5"))
@@ -330,11 +334,11 @@ class TestProviderFactory:
         assert provider.model == "OLLAMA-M"
 
     def test_provider_name_is_case_insensitive(self) -> None:
-        provider = build_provider(_FakeSettings(ai_provider="  OpenAI  "))
-        assert provider.name == "openai"
+        provider = build_provider(_FakeSettings(ai_provider="  Gemini  "))
+        assert provider.name == "gemini"
 
     def test_unknown_provider_raises(self) -> None:
         with pytest.raises(UnknownProviderError) as exc:
             build_provider(_FakeSettings(ai_provider="claude"))
         assert "claude" in str(exc.value)
-        assert "openai" in str(exc.value)  # tells the user what IS available
+        assert "gemini" in str(exc.value)  # tells the user what IS available
