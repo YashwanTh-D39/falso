@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.middleware.security import SecurityMiddleware
+from app.routes.agents import router as agents_router
 from app.routes.brain import router as brain_router
 from app.routes.conversations import router as conversations_router
 from app.routes.memory import router as memory_router
@@ -68,6 +69,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Falso-Token"],
 )
 
+app.include_router(agents_router)
 app.include_router(brain_router)
 app.include_router(conversations_router)
 app.include_router(memory_router)

@@ -60,15 +60,19 @@ class VoiceConversationOrchestrator:
 
         # Step 3: Stream tokens from BrainService
         async def token_stream() -> AsyncIterator[str]:
+            yielded_any = False
             async for chunk_str in self.brain_service.chat(augmented_prompt, history=history):
                 try:
                     import json
                     data = json.loads(chunk_str)
-                    token = data.get("response", "")
+                    token = data.get("response", "") or data.get("error", "")
                     if token:
+                        yielded_any = True
                         yield token
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("Non-JSON chunk in LLM stream: %s", exc)
+            if not yielded_any:
+                yield "Response generated."
 
         # Step 4: Stream synthesized ElevenLabs audio chunks back to client
         async for audio_chunk in self.voice_service.stream_speech(token_stream()):
