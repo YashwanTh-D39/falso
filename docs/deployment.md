@@ -1,16 +1,12 @@
 # Deployment Guide
 
-Falso runs as a single process. Chat streams through the **OpenAI Responses
-API** by default (cloud, no local LLM required) or through a local **Ollama**
-process if you prefer a fully offline setup. This guide covers local/manual
-deployment and containerized deployment ([docker.md](docker.md) for Docker
-specifics).
+Falso runs as a single process. Chat streams through **Google Gemini** (Google AI Studio API) by default (cloud, no local LLM required) or through a local **Ollama** process if you prefer a fully offline setup. This guide covers local/manual deployment and containerized deployment ([docker.md](docker.md) for Docker specifics).
 
 ## Prerequisites
 
 - **Python 3.11+** (tested on 3.14)
-- **OpenAI API key** (default `openai` provider) — set it in `.env` as
-  `OPENAI_API_KEY`
+- **Gemini API key** (default `gemini` provider) — set it in `.env` as `GEMINI_API_KEY` (get one at [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey))
+- **Optional** — ElevenLabs API key (`ELEVENLABS_API_KEY`) for natural cloud TTS.
 - **Optional** — for `AI_PROVIDER=ollama`, Ollama with the model pulled:
 
   ```bash

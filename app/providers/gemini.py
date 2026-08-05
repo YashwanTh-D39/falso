@@ -88,7 +88,7 @@ class GeminiProvider(BaseAIProvider):
     ) -> AsyncIterator[ProviderChunk]:
         if not self.api_key:
             raise AIProviderError(
-                "Gemini API key not configured — set GEMINI_API_KEY in .env"
+                "Gemini API key not configured. Please add GEMINI_API_KEY to your .env file."
             )
 
         payload = self.to_gemini_payload(messages)

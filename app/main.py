@@ -35,6 +35,12 @@ async def lifespan(app: FastAPI):
     setup_logging()
     system_monitor.start()
     logger.info("Falso API starting up")
+
+    if settings.ai_provider == "gemini" and not settings.gemini_api_key:
+        logger.warning(
+            "⚠️  Gemini API key not configured. Please add GEMINI_API_KEY to your .env file."
+        )
+
     try:
         yield
     finally:

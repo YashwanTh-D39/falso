@@ -585,6 +585,7 @@
   <div class="hint-row">
     <span data-hint="toggle dock">SIDE PANEL</span>
     <span data-hint="run core diagnostics">CORE SCAN</span>
+    <span data-hint="settings">SETTINGS</span>
     <span data-hint="list files">LOCAL FS</span>
     <span data-hint="new conversation">NEW CHAT</span>
   </div>
@@ -631,6 +632,38 @@
 <div class="panel" id="panelNet">
   <div class="panel-body">
     <div id="netText">FALSO // READY</div>
+  </div>
+</div>
+
+<!-- AI Provider Settings panel (overlay) -->
+<div class="panel" id="panelSettings" style="top:50%;right:44px;transform:translate(0,-50%) translateX(24px);width:280px;z-index:90;opacity:0;pointer-events:none;transition:transform 0.45s cubic-bezier(.16,.9,.24,1),opacity 0.35s ease">
+  <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center">
+    <span>AI PROVIDER SETTINGS</span>
+    <span id="closeSettingsBtn" style="cursor:pointer;font-weight:700;padding:2px 6px">✕</span>
+  </div>
+  <div class="panel-body" style="padding:14px;display:flex;flex-direction:column;gap:12px">
+    <div>
+      <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">PRIMARY PROVIDER</label>
+      <select id="settingProvider" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
+        <option value="gemini">Gemini (Google AI Studio — Primary)</option>
+        <option value="openai">OpenAI (Optional Cloud)</option>
+        <option value="ollama">Ollama (Local)</option>
+      </select>
+    </div>
+    <div>
+      <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">GEMINI API KEY</label>
+      <input type="password" id="settingGeminiKey" placeholder="Paste GEMINI_API_KEY..." style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px" />
+    </div>
+    <div>
+      <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">GEMINI MODEL</label>
+      <select id="settingGeminiModel" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
+        <option value="gemini-2.5-flash">gemini-2.5-flash (Fast)</option>
+        <option value="gemini-1.5-pro">gemini-1.5-pro (Reasoning)</option>
+        <option value="gemini-3.6-flash">gemini-3.6-flash (Latest)</option>
+      </select>
+    </div>
+    <button id="saveSettingsBtn" style="background:var(--ember);color:var(--bg);border:none;padding:8px;font-family:var(--f-display);font-size:10px;font-weight:700;letter-spacing:0.1em;cursor:pointer;margin-top:4px">SAVE & APPLY SETTINGS</button>
+    <div id="settingsToast" style="font-size:10px;color:var(--gold);font-family:var(--f-mono);display:none;margin-top:4px"></div>
   </div>
 </div>
 
@@ -1921,6 +1954,10 @@
       after(3800, ()=> setState('idle'));
       return;
     }
+    if(low === 'settings' || low === 'ai settings' || low === 'provider settings'){
+      openSettingsPanel();
+      return;
+    }
     if(low === 'list files' || low === 'local fs' || low === 'files'){
       sendToFalso('list files');
       return;
@@ -1953,6 +1990,75 @@
       runCommand(cmd);
     });
   });
+
+  /* ─── AI Provider Settings Panel ─── */
+  const panelSettings = document.getElementById('panelSettings');
+  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const settingProvider = document.getElementById('settingProvider');
+  const settingGeminiKey = document.getElementById('settingGeminiKey');
+  const settingGeminiModel = document.getElementById('settingGeminiModel');
+  const settingsToast = document.getElementById('settingsToast');
+
+  async function openSettingsPanel(){
+    if(!panelSettings) return;
+    panelSettings.style.opacity = '1';
+    panelSettings.style.pointerEvents = 'auto';
+    panelSettings.style.transform = 'translate(0,-50%) translateX(0)';
+    try{
+      const res = await fetch(API_BASE + '/system/settings');
+      if(res.ok){
+        const data = await res.json();
+        if(data.ai_provider) settingProvider.value = data.ai_provider;
+        if(data.gemini_model) settingGeminiModel.value = data.gemini_model;
+        if(data.gemini_api_key_configured) settingGeminiKey.placeholder = 'Configured (' + data.gemini_api_key_masked + ')';
+      }
+    }catch(e){}
+  }
+
+  function closeSettingsPanel(){
+    if(!panelSettings) return;
+    panelSettings.style.opacity = '0';
+    panelSettings.style.pointerEvents = 'none';
+    panelSettings.style.transform = 'translate(0,-50%) translateX(24px)';
+  }
+
+  if(closeSettingsBtn) closeSettingsBtn.addEventListener('click', closeSettingsPanel);
+
+  if(saveSettingsBtn){
+    saveSettingsBtn.addEventListener('click', async ()=>{
+      const payload = {
+        ai_provider: settingProvider.value,
+        gemini_model: settingGeminiModel.value,
+      };
+      if(settingGeminiKey.value.trim()){
+        payload.gemini_api_key = settingGeminiKey.value.trim();
+      }
+      try{
+        saveSettingsBtn.disabled = true;
+        saveSettingsBtn.textContent = 'SAVING...';
+        const res = await fetch(API_BASE + '/system/settings', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        saveSettingsBtn.disabled = false;
+        saveSettingsBtn.textContent = 'SAVE & APPLY SETTINGS';
+        if(res.ok){
+          const data = await res.json();
+          if(settingsToast){
+            settingsToast.style.display = 'block';
+            settingsToast.textContent = 'SETTINGS APPLIED — ' + data.ai_provider.toUpperCase() + ' ACTIVE';
+            setTimeout(()=> settingsToast.style.display='none', 4000);
+          }
+          speak('AI Provider settings saved. ' + data.ai_provider.toUpperCase() + ' active.', 3000);
+        }
+      }catch(e){
+        saveSettingsBtn.disabled = false;
+        saveSettingsBtn.textContent = 'SAVE & APPLY SETTINGS';
+      }
+    });
+  }
 
   /* ─── Hand tracking ─── */
   let handDetected = false;
