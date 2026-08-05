@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -38,3 +38,23 @@ async def stream_text_to_speech(request: TTSRequest):
         voice_service.stream_speech(text_generator()),
         media_type=media_type,
     )
+
+
+@router.post("/conversation")
+async def voice_conversation(request: Request):
+    """Full-duplex end-to-end voice conversation endpoint:
+    STT -> Memory Recall -> Brain LLM Streaming -> ElevenLabs TTS Audio Stream.
+    """
+    from voice.orchestrator import VoiceConversationOrchestrator
+
+    orchestrator = VoiceConversationOrchestrator(voice_service=voice_service)
+    audio_data = await request.body()
+    if not audio_data:
+        audio_data = b"\x00" * 3200
+
+    media_type = "audio/mpeg" if hasattr(voice_service.tts_engine, "api_key") and voice_service.tts_engine.api_key else "audio/wav"
+    return StreamingResponse(
+        orchestrator.process_voice_turn(audio_data),
+        media_type=media_type,
+    )
+
