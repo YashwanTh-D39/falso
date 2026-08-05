@@ -141,8 +141,7 @@ def _list_files(*, offset: int = 0, limit: int = 50) -> list[dict]:
 
 @router.get("/")
 async def list_conversations(page: int = 1, per_page: int = 50):
-    if page < 1:
-        page = 1
+    page = max(page, 1)
     if per_page < 1:
         per_page = 1
     elif per_page > 200:

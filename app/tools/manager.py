@@ -60,7 +60,7 @@ class ToolManager:
 
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed = time.perf_counter() - start
             logger.warning(
                 "Tool '%s' timed out after %.3fs (limit=%.1fs)",
