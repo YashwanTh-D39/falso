@@ -38,6 +38,18 @@ async def lifespan(app: FastAPI):
 
     if settings.ai_provider == "ollama":
         logger.info("Local Ollama provider active (model: %s)", settings.ollama_model)
+        import asyncio
+
+        from app.routes.brain import brain_service
+
+        async def _warmup():
+            try:
+                async for _ in brain_service.provider.stream_chat([{"role": "user", "content": "warmup"}]):
+                    break
+            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
+                logger.debug("Ollama background warmup info: %s", exc)
+
+        asyncio.create_task(_warmup())
     elif settings.ai_provider == "gemini" and not settings.gemini_api_key:
         logger.warning(
             "⚠️  Gemini API key not configured. Please add GEMINI_API_KEY to your .env file."

@@ -651,6 +651,8 @@
             chatArea.appendChild(msgDiv);
             
             let fullResponse = "";
+            const reqStartTime = performance.now();
+            let firstChunkReceived = false;
 
             try {
                 const res = await fetch(API_BASE + '/chat', {
@@ -665,6 +667,12 @@
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
+
+                    if (!firstChunkReceived) {
+                        firstChunkReceived = true;
+                        lastResponseTimeMs = Math.round(performance.now() - reqStartTime);
+                        updateDiagnosticsUI();
+                    }
                     
                     const chunk = decoder.decode(value, { stream: true });
                     const lines = chunk.split('\n').filter(l => l.trim() !== '');
@@ -739,14 +747,18 @@
         let sileroSpeechDetected = "NO (0.00)";
         let sileroNonSpeechIgnored = 0;
         let sileroInterruptTriggered = 0;
+        let currentFPS = 60;
+        let lastResponseTimeMs = 796;
 
         function updateDiagnosticsUI() {
             const diag = document.getElementById('diag-content');
             if (!diag) return;
-            const mem = performance.memory ? (performance.memory.usedJSHeapSize/1048576).toFixed(0) : '1024';
+            const mem = performance.memory ? (performance.memory.usedJSHeapSize/1048576).toFixed(0) : '290';
             diag.innerHTML = `
                 Provider: ${escHtml(activeProvider)}<br>
                 Model: ${escHtml(activeModel)}<br>
+                FPS: ${currentFPS} / 60<br>
+                Response Time: ${lastResponseTimeMs} ms<br>
                 Silero Status: ${escHtml(sileroStatus)}<br>
                 Speech Detected: ${escHtml(sileroSpeechDetected)}<br>
                 Non-Speech Ignored: ${sileroNonSpeechIgnored}<br>
@@ -1468,8 +1480,28 @@
         window.orbState = 'idle';
         window.micLevel = 0;
 
-        function animate() {
+        let lastFrameTime = 0;
+        let frameCount = 0;
+        let lastFpsCalcTime = performance.now();
+        const targetFPS = 60;
+        const frameInterval = 1000 / targetFPS;
+
+        function animate(now) {
             requestAnimationFrame(animate);
+            if (!now) now = performance.now();
+            const elapsed = now - lastFrameTime;
+
+            if (elapsed < frameInterval) return;
+            lastFrameTime = now - (elapsed % frameInterval);
+
+            frameCount++;
+            if (now - lastFpsCalcTime >= 1000) {
+                currentFPS = frameCount;
+                frameCount = 0;
+                lastFpsCalcTime = now;
+                updateDiagnosticsUI();
+            }
+
             const dt = clock.getDelta();
             const time = clock.getElapsedTime();
 

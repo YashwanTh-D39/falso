@@ -61,7 +61,16 @@ class OllamaProvider(BaseAIProvider):
             async with client.stream(
                 "POST",
                 f"{self.base_url}/api/chat",
-                json={"model": self.model, "messages": messages, "stream": True},
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "stream": True,
+                    "keep_alive": "24h",
+                    "options": {
+                        "num_ctx": 2048,
+                        "temperature": 0.7,
+                    },
+                },
             ) as resp:
                 if resp.status_code != 200:
                     body = (await resp.aread())[:500].decode(errors="replace")
