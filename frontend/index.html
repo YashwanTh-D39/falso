@@ -946,6 +946,19 @@
         /* ─── Server TTS Integration & Audio Playback ─── */
         let currentAudioSource = null;
 
+        function triggerVoiceInterruption() {
+            if (sysState === 'speaking' || isSpeakingSpeech) {
+                console.log("[TTS] Interrupted by user");
+                stopActiveAudioPlayback();
+                console.log("[TTS] Stopped");
+                changeState('listening');
+                console.log("[STT] Listening");
+                if (micActive && speechRec) {
+                    try { speechRec.start(); } catch(e) {}
+                }
+            }
+        }
+
         function stopActiveAudioPlayback() {
             if (currentAudioSource) {
                 try { currentAudioSource.pause(); currentAudioSource.currentTime = 0; } catch(e) {}
@@ -959,6 +972,7 @@
         async function playServerTTS(text) {
             const ttsText = text.length > TTS_MAX_CHARS ? text.substring(0, TTS_MAX_CHARS) + '...' : text;
             isSpeakingSpeech = true;
+            console.log("[TTS] Started");
             try {
                 const res = await fetch(API_BASE + '/voice/tts', {
                     method: 'POST',
@@ -975,6 +989,7 @@
                     const audioBlob = await res.blob();
                     if (audioBlob.size < 100) {
                         isSpeakingSpeech = false;
+                        console.log("[TTS] Stopped");
                         return false;
                     }
                     const audioUrl = URL.createObjectURL(audioBlob);
@@ -985,20 +1000,24 @@
                         URL.revokeObjectURL(audioUrl);
                         currentAudioSource = null;
                         isSpeakingSpeech = false;
+                        console.log("[TTS] Stopped");
                         lastSpeechTime = Date.now();
                         setTimeout(() => {
                             changeState('listening');
+                            console.log("[STT] Listening");
                             if (micActive && speechRec) { try { speechRec.start(); } catch(e) {} }
-                        }, 250);
+                        }, 150);
                     };
                     audio.onerror = (e) => {
                         URL.revokeObjectURL(audioUrl);
                         currentAudioSource = null;
                         isSpeakingSpeech = false;
+                        console.log("[TTS] Stopped");
                         setTimeout(() => {
                             changeState('listening');
+                            console.log("[STT] Listening");
                             if (micActive && speechRec) { try { speechRec.start(); } catch(e) {} }
-                        }, 250);
+                        }, 150);
                     };
                     try {
                         await audio.play();
@@ -1007,6 +1026,7 @@
                         console.warn('[TTS] HTML5 Audio play warning:', playErr.message);
                         currentAudioSource = null;
                         isSpeakingSpeech = false;
+                        console.log("[TTS] Stopped");
                         return false;
                     }
                 }
@@ -1014,6 +1034,7 @@
                 console.warn('[TTS] Server TTS fetch exception:', e);
             }
             isSpeakingSpeech = false;
+            console.log("[TTS] Stopped");
             return false;
         }
 
@@ -1047,11 +1068,10 @@
         }
 
         /* ─── Smart VAD & Interruption Engine ─── */
-        /* ─── Silero VAD & Interruption Engine ─── */
         window.smartVadConfig = {
             sensitivity: 'balanced',
-            minDurationMs: 400,
-            confidenceThreshold: 0.75,
+            minDurationMs: 300,
+            confidenceThreshold: 0.85,
             vadThreshold: 18.0,
             noiseFloorMultiplier: 1.5
         };
@@ -1061,12 +1081,15 @@
             if (preset === 'high_noise') {
                 smartVadConfig.vadThreshold = 24.0;
                 smartVadConfig.noiseFloorMultiplier = 1.8;
+                smartVadConfig.confidenceThreshold = 0.88;
             } else if (preset === 'quiet_room') {
                 smartVadConfig.vadThreshold = 14.0;
                 smartVadConfig.noiseFloorMultiplier = 1.3;
+                smartVadConfig.confidenceThreshold = 0.80;
             } else {
                 smartVadConfig.vadThreshold = 18.0;
                 smartVadConfig.noiseFloorMultiplier = 1.5;
+                smartVadConfig.confidenceThreshold = 0.85;
             }
         }
         let micStream = null;
@@ -1079,7 +1102,9 @@
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true
+                        autoGainControl: true,
+                        channelCount: 1,
+                        sampleRate: 16000
                     }
                 });
 
@@ -1092,6 +1117,7 @@
 
                 micActive = true;
                 console.log('[Microphone Started]');
+                console.log('[STT] Listening');
 
                 initSpeechRecognition();
                 pollMic();
@@ -1124,12 +1150,15 @@
 
             speechRec.onstart = () => {
                 isRecStarting = false;
-                console.log('[Microphone Started] WebSpeech session active');
+                console.log('[STT] Listening');
             };
 
             speechRec.onspeechstart = () => {
-                console.log('[Speech Started]');
-                if (sysState === 'idle' || sysState === 'sleeping') {
+                console.log('[VAD] Speech detected');
+                if (sysState === 'speaking' || isSpeakingSpeech) {
+                    console.log('[VAD] Human voice accepted');
+                    triggerVoiceInterruption();
+                } else if (sysState === 'idle' || sysState === 'sleeping') {
                     changeState('listening');
                 }
             };
@@ -1148,7 +1177,7 @@
 
                 const clean = finalTranscript.trim();
                 if (clean) {
-                    console.log('[Recognition Result]', clean);
+                    console.log('[STT] Recognizing:', clean);
                     lastSpeechTime = Date.now();
                     if (sysState !== 'speaking' && sysState !== 'thinking') {
                         sendToFalso(clean);
@@ -1222,6 +1251,11 @@
 
                 if (res.ok) {
                     const data = await res.json();
+                    if (data.is_speech) {
+                        console.log(`[VAD] Human voice accepted (prob=${data.probability})`);
+                    } else {
+                        console.log(`[VAD] Noise rejected`);
+                    }
                     if (data.diagnostics) {
                         sileroStatus = data.diagnostics.silero_status || sileroStatus;
                         sileroSpeechDetected = (data.is_speech ? 'YES' : 'NO') + ' (' + (data.probability || 0).toFixed(2) + ')';
@@ -1230,7 +1264,6 @@
                         updateDiagnosticsUI();
                     }
 
-                    // REQUIREMENT 8: Halts TTS only when Silero confirms human speech >= 400ms
                     if (sysState === 'speaking' && isSpeakingSpeech && data.interrupt === true) {
                         console.log(`[SILERO VAD INTERRUPT] Silero VAD confirmed human speech (prob=${data.probability}) -> Halting TTS!`);
                         triggerVoiceInterruption();
