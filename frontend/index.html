@@ -1161,20 +1161,17 @@
             } catch(e) {}
         };
 
-        // State Machine
-        function changeState(newState) {
-            sysState = newState;
-            document.getElementById('diag-content').innerHTML = `
-                SYS.MEM: ${(performance.memory ? (performance.memory.usedJSHeapSize/1048576).toFixed(0) : '???')} MB<br>
-                LATENCY: 12 ms<br>
-                STATE: ${newState.toUpperCase()}
-            `;
-            window.orbState = newState; // Communicated to Three.js
-        }
-
+        // Memory stats update interval
         setInterval(() => {
-            if(sysState === 'idle') changeState('idle'); // update mem
-        }, 2000);
+            const diag = document.getElementById('diag-content');
+            if (diag && performance.memory) {
+                diag.innerHTML = `
+                    SYS.MEM: ${(performance.memory.usedJSHeapSize/1048576).toFixed(0)} MB<br>
+                    LATENCY: 12 ms<br>
+                    STATE: ${sysState.toUpperCase()}
+                `;
+            }
+        }, 2500);
 
 
         // ==========================================
