@@ -475,10 +475,32 @@
                 <label>ELEVENLABS API KEY</label>
                 <input type="password" id="set-el-key" placeholder="Paste ElevenLabs key...">
             </div>
+            <div class="form-group" style="margin-top:15px;border-top:1px solid rgba(120,220,255,0.2);padding-top:12px;">
+                <label style="color:#7DF9FF;font-weight:bold;">SMART VAD & INTERRUPTION</label>
+            </div>
             <div class="form-group">
-                <label>ELEVENLABS VOICE</label>
-                <select id="set-el-voice">
-                    <option value="21m00Tcm4TlvDq8ikWAM">Rachel (Default)</option>
+                <label>SENSITIVITY</label>
+                <select id="set-vad-sensitivity">
+                    <option value="balanced" selected>Balanced (Default)</option>
+                    <option value="high_noise">High Noise (Fan/AC Filtering)</option>
+                    <option value="quiet_room">Quiet Room</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>MIN SPEECH DURATION</label>
+                <select id="set-vad-duration">
+                    <option value="300" selected>300 ms (Default)</option>
+                    <option value="200">200 ms (Fast Response)</option>
+                    <option value="450">450 ms (Noise Resistant)</option>
+                    <option value="600">600 ms (Strict Filtering)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>SPEECH CONFIDENCE</label>
+                <select id="set-vad-confidence">
+                    <option value="0.75" selected>0.75 (Balanced)</option>
+                    <option value="0.65">0.65 (Sensitive)</option>
+                    <option value="0.85">0.85 (High Precision)</option>
                 </select>
             </div>
             <button onclick="saveSettings()">SAVE CONFIG</button>
@@ -951,6 +973,65 @@
             }
         }
 
+        /* ─── Smart VAD & Interruption Engine ─── */
+        window.smartVadConfig = {
+            sensitivity: 'balanced',
+            minDurationMs: 300,
+            confidenceThreshold: 0.75,
+            vadThreshold: 18.0,
+            noiseFloorMultiplier: 1.5
+        };
+
+        function applyVadPreset(preset) {
+            smartVadConfig.sensitivity = preset;
+            if (preset === 'high_noise') {
+                smartVadConfig.vadThreshold = 24.0;
+                smartVadConfig.noiseFloorMultiplier = 1.8;
+            } else if (preset === 'quiet_room') {
+                smartVadConfig.vadThreshold = 14.0;
+                smartVadConfig.noiseFloorMultiplier = 1.3;
+            } else {
+                smartVadConfig.vadThreshold = 18.0;
+                smartVadConfig.noiseFloorMultiplier = 1.5;
+            }
+        }
+
+        let ambientNoiseFloor = 8.0;
+        let speechStartTime = 0;
+
+        function calculateSpeechFormantEnergy() {
+            if (!analyser || !dataArray) return { speechEnergy: 0, rawAvg: 0 };
+            analyser.getByteFrequencyData(dataArray);
+
+            let sumTotal = 0;
+            let formantSum = 0;
+            let formantBins = 0;
+            let noisePenaltySum = 0;
+            let noiseBins = 0;
+
+            // FFT 512 at 48kHz: Bins 3-35 correspond to ~280Hz-3300Hz (Human Vocal Formants)
+            // Bins <3: AC/Fan hum. Bins >40: Keyboard/mouse click impulses.
+            for (let i = 0; i < dataArray.length; i++) {
+                const val = dataArray[i];
+                sumTotal += val;
+
+                if (i >= 3 && i <= 35) {
+                    formantSum += val;
+                    formantBins++;
+                } else {
+                    noisePenaltySum += val;
+                    noiseBins++;
+                }
+            }
+
+            const rawAvg = sumTotal / dataArray.length;
+            const formantAvg = formantBins > 0 ? (formantSum / formantBins) : 0;
+            const noiseAvg = noiseBins > 0 ? (noisePenaltySum / noiseBins) : 0;
+
+            const speechEnergy = Math.max(0, formantAvg - (noiseAvg * 0.4));
+            return { speechEnergy, rawAvg };
+        }
+
         // STT Web Speech (Continuous Hands-Free)
         function initSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -967,9 +1048,30 @@
                 }
             };
             rec.onresult = (event) => {
-                // Acoustic echo guard: ignore transcript if FALSO is currently speaking or thinking
-                if (sysState === 'speaking' || sysState === 'thinking' || isSpeakingSpeech) {
-                    console.log('[STT ECHO GUARD] Ignoring transcript while FALSO is speaking/thinking');
+                // Neural Speech Interruption: Check interim results if user speaks mid-speech
+                if (sysState === 'speaking' || isSpeakingSpeech) {
+                    let interimText = '';
+                    let highestConf = 0.85;
+
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        const res = event.results[i];
+                        if (res && res[0]) {
+                            interimText += res[0].transcript;
+                            if (res[0].confidence > 0) highestConf = res[0].confidence;
+                        }
+                    }
+
+                    if (interimText.trim().length > 0 && highestConf >= smartVadConfig.confidenceThreshold) {
+                        console.log(`[SMART STT INTERRUPT] Neural speech detected: "${interimText.trim()}" (conf=${highestConf.toFixed(2)}) -> Instant Interruption!`);
+                        triggerVoiceInterruption();
+                        return;
+                    }
+                    console.log('[STT ECHO GUARD] Ignoring non-speech background sound while speaking');
+                    return;
+                }
+
+                if (sysState === 'thinking') {
+                    console.log('[STT ECHO GUARD] Ignoring transcript while FALSO is thinking');
                     return;
                 }
 
@@ -1034,12 +1136,22 @@
             stopActiveAudioPlayback();
             if (!speechRec) speechRec = initSpeechRecognition();
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // DSP Hardware AEC, ANS, AGC constraints
+                const audioConstraints = {
+                    audio: {
+                        echoCancellation: { ideal: true },
+                        noiseSuppression: { ideal: true },
+                        autoGainControl: { ideal: true },
+                        channelCount: 1,
+                        sampleRate: 48000
+                    }
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 const source = audioContext.createMediaStreamSource(stream);
                 source.connect(analyser);
-                analyser.fftSize = 256;
+                analyser.fftSize = 512;
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
                 
                 micActive = true;
@@ -1058,20 +1170,41 @@
 
         function pollMic() {
             if (!micActive || !analyser) return;
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-            let avg = sum / dataArray.length;
-            window.micLevel = avg;
 
-            // INSTANT FULL-DUPLEX VOICE INTERRUPTION GUARD (<35ms Latency)
-            if (sysState === 'speaking' && avg > 14.0) {
-                console.log('[FULL-DUPLEX VAD] User voice detected mid-speech (avg=' + avg.toFixed(1) + ') -> INSTANT INTERRUPTION!');
-                triggerVoiceInterruption();
+            const { speechEnergy, rawAvg } = calculateSpeechFormantEnergy();
+            window.micLevel = rawAvg;
+
+            // 1. Dynamic Noise Floor Profiling (Smooth tracking during idle/listening)
+            if (sysState === 'idle' || sysState === 'listening') {
+                if (rawAvg < 25.0) {
+                    ambientNoiseFloor = (ambientNoiseFloor * 0.95) + (rawAvg * 0.05);
+                }
+            }
+
+            // 2. SMART VAD INTERRUPTION RULE CHECK
+            if (sysState === 'speaking' && isSpeakingSpeech) {
+                const requiredThreshold = Math.max(smartVadConfig.vadThreshold, ambientNoiseFloor * smartVadConfig.noiseFloorMultiplier);
+
+                if (speechEnergy >= requiredThreshold) {
+                    if (speechStartTime === 0) speechStartTime = Date.now();
+                    const speechDuration = Date.now() - speechStartTime;
+
+                    // Interrupt ONLY if sustained human speech lasts at least minDurationMs (e.g. 300ms)
+                    if (speechDuration >= smartVadConfig.minDurationMs) {
+                        console.log(`[SMART VAD INTERRUPT] Validated human speech (energy=${speechEnergy.toFixed(1)}, duration=${speechDuration}ms) -> Halting TTS!`);
+                        speechStartTime = 0;
+                        triggerVoiceInterruption();
+                    }
+                } else {
+                    // Reset timer on transient energy drop — ignores clicks, keypresses, mouse snaps
+                    speechStartTime = 0;
+                }
+            } else {
+                speechStartTime = 0;
             }
 
             // Wake from sleeping if audio detected
-            if (sysState === 'sleeping' && avg > 15) {
+            if (sysState === 'sleeping' && rawAvg > 18.0) {
                 lastSpeechTime = Date.now();
                 changeState('listening');
             }
@@ -1121,6 +1254,18 @@
             const elKeyEl = document.getElementById('set-el-key');
             if (elKeyEl && elKeyEl.value.trim()) payload.elevenlabs_api_key = elKeyEl.value.trim();
 
+            const vadSens = document.getElementById('set-vad-sensitivity') ? document.getElementById('set-vad-sensitivity').value : 'balanced';
+            const vadDur = document.getElementById('set-vad-duration') ? parseInt(document.getElementById('set-vad-duration').value, 10) : 300;
+            const vadConf = document.getElementById('set-vad-confidence') ? parseFloat(document.getElementById('set-vad-confidence').value) : 0.75;
+
+            applyVadPreset(vadSens);
+            smartVadConfig.minDurationMs = vadDur;
+            smartVadConfig.confidenceThreshold = vadConf;
+
+            try {
+                localStorage.setItem('falso_vad_config', JSON.stringify({ sensitivity: vadSens, minDurationMs: vadDur, confidenceThreshold: vadConf }));
+            } catch(e) {}
+
             try {
                 const res = await fetch(API_BASE + '/system/settings', {
                     method: 'POST',
@@ -1129,7 +1274,7 @@
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    appendMessage('system', 'Settings saved — ' + (data.tts_provider || 'ELEVENLABS').toUpperCase() + ' TTS active.');
+                    appendMessage('system', 'Settings saved — SMART VAD active (' + vadSens.toUpperCase() + ', ' + vadDur + 'ms).');
                     if (data.elevenlabs_voice_id) loadVoices(data.elevenlabs_voice_id);
                 } else {
                     appendMessage('system', 'Failed to save settings.');
@@ -1177,6 +1322,24 @@
 
         // Load settings on panel open
         window.loadSettings = async () => {
+            const savedVad = localStorage.getItem('falso_vad_config');
+            if (savedVad) {
+                try {
+                    const vadData = JSON.parse(savedVad);
+                    if (vadData.sensitivity && document.getElementById('set-vad-sensitivity')) {
+                        document.getElementById('set-vad-sensitivity').value = vadData.sensitivity;
+                        applyVadPreset(vadData.sensitivity);
+                    }
+                    if (vadData.minDurationMs && document.getElementById('set-vad-duration')) {
+                        document.getElementById('set-vad-duration').value = vadData.minDurationMs;
+                        smartVadConfig.minDurationMs = parseInt(vadData.minDurationMs, 10);
+                    }
+                    if (vadData.confidenceThreshold && document.getElementById('set-vad-confidence')) {
+                        document.getElementById('set-vad-confidence').value = vadData.confidenceThreshold;
+                        smartVadConfig.confidenceThreshold = parseFloat(vadData.confidenceThreshold);
+                    }
+                } catch(e) {}
+            }
             try {
                 const res = await fetch(API_BASE + '/system/settings');
                 if (res.ok) {
