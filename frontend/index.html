@@ -636,7 +636,7 @@
 </div>
 
 <!-- AI Provider Settings panel (overlay) -->
-<div class="panel" id="panelSettings" style="top:50%;right:44px;transform:translate(0,-50%) translateX(24px);width:280px;z-index:90;opacity:0;pointer-events:none;transition:transform 0.45s cubic-bezier(.16,.9,.24,1),opacity 0.35s ease">
+<div class="panel" id="panelSettings" style="top:50%;right:44px;transform:translate(0,-50%) translateX(24px);width:290px;z-index:90;opacity:0;pointer-events:none;transition:transform 0.45s cubic-bezier(.16,.9,.24,1),opacity 0.35s ease">
   <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center">
     <span>AI PROVIDER SETTINGS</span>
     <span id="closeSettingsBtn" style="cursor:pointer;font-weight:700;padding:2px 6px">✕</span>
@@ -645,7 +645,7 @@
     <div>
       <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">PRIMARY PROVIDER</label>
       <select id="settingProvider" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
-        <option value="gemini">Gemini (Google AI Studio — Primary)</option>
+        <option value="gemini">Gemini (Google AI Studio — Default)</option>
         <option value="openai">OpenAI (Optional Cloud)</option>
         <option value="ollama">Ollama (Local)</option>
       </select>
@@ -657,12 +657,17 @@
     <div>
       <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">GEMINI MODEL</label>
       <select id="settingGeminiModel" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
-        <option value="gemini-2.5-flash">gemini-2.5-flash (Fast)</option>
-        <option value="gemini-1.5-pro">gemini-1.5-pro (Reasoning)</option>
-        <option value="gemini-3.6-flash">gemini-3.6-flash (Latest)</option>
+        <option value="gemini-3.6-flash">gemini-3.6-flash (Default / Fast)</option>
+        <option value="gemini-3.1-flash">gemini-3.1-flash (Ultra Fast)</option>
+        <option value="gemini-3.1-pro">gemini-3.1-pro (Deep Reasoning)</option>
+        <option value="gemini-1.5-flash">gemini-1.5-flash (Standard)</option>
+        <option value="gemini-1.5-pro">gemini-1.5-pro (Legacy Pro)</option>
       </select>
     </div>
-    <button id="saveSettingsBtn" style="background:var(--ember);color:var(--bg);border:none;padding:8px;font-family:var(--f-display);font-size:10px;font-weight:700;letter-spacing:0.1em;cursor:pointer;margin-top:4px">SAVE & APPLY SETTINGS</button>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button id="saveSettingsBtn" style="flex:1;background:var(--ember);color:var(--bg);border:none;padding:8px;font-family:var(--f-display);font-size:10px;font-weight:700;letter-spacing:0.1em;cursor:pointer">SAVE SETTINGS</button>
+      <button id="testConnBtn" style="background:rgba(255,255,255,0.1);color:var(--white);border:1px solid var(--line);padding:8px;font-family:var(--f-mono);font-size:10px;cursor:pointer">TEST KEY</button>
+    </div>
     <div id="settingsToast" style="font-size:10px;color:var(--gold);font-family:var(--f-mono);display:none;margin-top:4px"></div>
   </div>
 </div>
@@ -2000,6 +2005,8 @@
   const settingGeminiModel = document.getElementById('settingGeminiModel');
   const settingsToast = document.getElementById('settingsToast');
 
+  const testConnBtn = document.getElementById('testConnBtn');
+
   async function openSettingsPanel(){
     if(!panelSettings) return;
     panelSettings.style.opacity = '1';
@@ -2013,6 +2020,21 @@
         if(data.gemini_model) settingGeminiModel.value = data.gemini_model;
         if(data.gemini_api_key_configured) settingGeminiKey.placeholder = 'Configured (' + data.gemini_api_key_masked + ')';
       }
+      const mRes = await fetch(API_BASE + '/system/models');
+      if(mRes.ok){
+        const mData = await mRes.json();
+        if(mData.models && mData.models.length > 0){
+          const currentVal = settingGeminiModel.value;
+          settingGeminiModel.innerHTML = '';
+          mData.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m + (m === 'gemini-3.6-flash' ? ' (Default)' : '');
+            settingGeminiModel.appendChild(opt);
+          });
+          if(mData.models.includes(currentVal)) settingGeminiModel.value = currentVal;
+        }
+      }
     }catch(e){}
   }
 
@@ -2024,6 +2046,28 @@
   }
 
   if(closeSettingsBtn) closeSettingsBtn.addEventListener('click', closeSettingsPanel);
+
+  if(testConnBtn){
+    testConnBtn.addEventListener('click', async ()=>{
+      if(settingsToast){
+        settingsToast.style.display = 'block';
+        settingsToast.textContent = 'TESTING CONNECTION...';
+      }
+      try{
+        const res = await fetch(API_BASE + '/system/test-connection', { method: 'POST' });
+        const data = await res.json();
+        if(settingsToast){
+          settingsToast.style.display = 'block';
+          settingsToast.textContent = data.message.toUpperCase();
+        }
+      }catch(e){
+        if(settingsToast){
+          settingsToast.style.display = 'block';
+          settingsToast.textContent = 'CONNECTION TEST FAILED';
+        }
+      }
+    });
+  }
 
   if(saveSettingsBtn){
     saveSettingsBtn.addEventListener('click', async ()=>{
@@ -2043,7 +2087,7 @@
           body: JSON.stringify(payload)
         });
         saveSettingsBtn.disabled = false;
-        saveSettingsBtn.textContent = 'SAVE & APPLY SETTINGS';
+        saveSettingsBtn.textContent = 'SAVE SETTINGS';
         if(res.ok){
           const data = await res.json();
           if(settingsToast){
@@ -2055,7 +2099,7 @@
         }
       }catch(e){
         saveSettingsBtn.disabled = false;
-        saveSettingsBtn.textContent = 'SAVE & APPLY SETTINGS';
+        saveSettingsBtn.textContent = 'SAVE SETTINGS';
       }
     });
   }

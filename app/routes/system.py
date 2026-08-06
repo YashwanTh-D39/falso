@@ -116,3 +116,56 @@ async def update_settings(request: SettingsUpdateRequest):
         "gemini_api_key_configured": bool(settings.gemini_api_key),
     }
 
+
+@router.get("/models")
+async def discover_models():
+    """Discover available Gemini models dynamically via Google AI Studio API."""
+    import httpx
+
+    from config.settings import settings
+
+    key = settings.gemini_api_key
+    if not key:
+        return {"models": ["gemini-3.6-flash", "gemini-3.1-flash", "gemini-3.1-pro", "gemini-1.5-flash", "gemini-1.5-pro"]}
+
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                raw_models = data.get("models", [])
+                names = []
+                for m in raw_models:
+                    name = m.get("name", "").replace("models/", "")
+                    if "gemini" in name and "generateContent" in m.get("supportedGenerationMethods", []):
+                        names.append(name)
+                if names:
+                    return {"models": names}
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Could not query Gemini models endpoint: %s", exc)
+
+    return {"models": ["gemini-3.6-flash", "gemini-3.1-flash", "gemini-3.1-pro", "gemini-1.5-flash", "gemini-1.5-pro"]}
+
+
+@router.post("/test-connection")
+async def test_connection():
+    """Test connection to active Gemini API key."""
+    import httpx
+
+    from config.settings import settings
+
+    key = settings.gemini_api_key
+    if not key:
+        return {"status": "error", "message": "Gemini API key is missing. Set GEMINI_API_KEY in .env"}
+
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}?key={key}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                return {"status": "ok", "message": f"Successfully connected to Gemini API ({settings.gemini_model})"}
+            return {"status": "error", "message": f"Gemini API returned status {resp.status_code}"}
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "message": f"Connection failed: {exc}"}
+

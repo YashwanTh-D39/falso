@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # Gemini (default primary AI provider — Google AI Studio / Gemini API)
     # API key from https://aistudio.google.com/app/apikey.
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.6-flash"
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
 
     # OpenAI (optional provider — used when AI_PROVIDER=openai)

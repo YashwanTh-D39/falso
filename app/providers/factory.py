@@ -45,7 +45,7 @@ def _build_openai_provider(s: Any) -> BaseAIProvider:
 #: Wrong config fails here at startup, so the server never streams errors.
 build = {
     "gemini": lambda s: GeminiProvider(
-        model=getattr(s, "gemini_model", "gemini-2.5-flash"),
+        model=getattr(s, "gemini_model", "gemini-3.6-flash"),
         api_key=getattr(s, "gemini_api_key", ""),
         base_url=getattr(s, "gemini_base_url", None),
     ),

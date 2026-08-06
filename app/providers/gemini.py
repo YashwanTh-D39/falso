@@ -23,7 +23,7 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
@@ -102,6 +102,44 @@ class GeminiProvider(BaseAIProvider):
                 json=payload,
                 headers={"Content-Type": "application/json"},
             ) as response:
+                if response.status_code == 404 and self.model != DEFAULT_GEMINI_MODEL:
+                    logger.warning(
+                        "Configured Gemini model %r is unavailable — automatically falling back to %r",
+                        self.model,
+                        DEFAULT_GEMINI_MODEL,
+                    )
+                    self.model = DEFAULT_GEMINI_MODEL
+                    fallback_endpoint = f"{self.base_url}/models/{self.model}:streamGenerateContent?alt=sse&key={self.api_key}"
+                    async with client.stream(
+                        "POST",
+                        fallback_endpoint,
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                    ) as fb_response:
+                        if fb_response.status_code != 200:
+                            fb_body = await fb_response.aread()
+                            raise AIProviderError(f"Gemini API fallback error {fb_response.status_code}: {fb_body.decode('utf-8', errors='ignore')}")
+                        async for line in fb_response.aiter_lines():
+                            line = line.strip()
+                            if not line.startswith("data:"):
+                                continue
+                            raw_data = line[5:].strip()
+                            if not raw_data or raw_data == "[DONE]":
+                                continue
+                            try:
+                                chunk_json = json.loads(raw_data)
+                                candidates = chunk_json.get("candidates", [])
+                                if not candidates:
+                                    continue
+                                parts = candidates[0].get("content", {}).get("parts", [])
+                                for part in parts:
+                                    text_delta = part.get("text", "")
+                                    if text_delta:
+                                        yield ProviderChunk(text=text_delta)
+                            except json.JSONDecodeError:
+                                continue
+                    return
+
                 if response.status_code != 200:
                     body = await response.aread()
                     error_msg = f"Gemini API error {response.status_code}"
