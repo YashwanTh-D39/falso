@@ -2347,22 +2347,35 @@
       return null;
     }
     const rec = new SpeechRecognition();
-    rec.continuous = false;
+    rec.continuous = true;
     rec.interimResults = true;
-    rec.lang = 'en-US';
+    rec.lang = navigator.language || 'en-US';
 
     rec.onstart = () => {
-      console.log('[VOICE PIPELINE] Stage 3: Recording started');
+      console.log('[VOICE PIPELINE] Stage 3: SpeechRecognition started (lang: ' + rec.lang + ', continuous: ' + rec.continuous + ')');
       showNetwork('VOICE // LISTENING...', 3000);
       setState('listening');
     };
 
+    rec.onaudiostart = () => console.log('[VOICE PIPELINE] SpeechRecognition: onaudiostart (Browser receiving audio stream)');
+    rec.onsoundstart = () => console.log('[VOICE PIPELINE] SpeechRecognition: onsoundstart (Sound detected above noise floor)');
+    rec.onspeechstart = () => console.log('[VOICE PIPELINE] SpeechRecognition: onspeechstart (Human voice pattern recognized)');
+    rec.onspeechend = () => console.log('[VOICE PIPELINE] SpeechRecognition: onspeechend (Human voice pattern paused)');
+    rec.onaudioend = () => console.log('[VOICE PIPELINE] SpeechRecognition: onaudioend (Audio capture closed)');
+
     rec.onresult = (event) => {
       let finalTranscript = '';
+      let interimTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const text = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
+          finalTranscript += text;
+        } else {
+          interimTranscript += text;
         }
+      }
+      if (interimTranscript.trim()) {
+        console.log('[VOICE PIPELINE] Interim STT: ' + JSON.stringify(interimTranscript.trim()));
       }
       if (finalTranscript.trim()) {
         const text = finalTranscript.trim();
@@ -2375,14 +2388,25 @@
     };
 
     rec.onerror = (event) => {
-      console.error('[VOICE PIPELINE] Stage 4 (STT) Failure:', event.error);
+      if (event.error === 'no-speech') {
+        console.warn('[VOICE PIPELINE] SpeechRecognition: no-speech (Silence window elapsed without speech).');
+        if (micActive) {
+          console.log('[VOICE PIPELINE] Restarting SpeechRecognition to keep listening...');
+          try { rec.start(); } catch(e){}
+        }
+        return;
+      }
+      console.error('[VOICE PIPELINE] Stage 4 (STT) Error:', event.error);
       showNetwork('STT ERROR: ' + event.error, 4000);
       disableMic();
     };
 
     rec.onend = () => {
-      console.log('[VOICE PIPELINE] Speech recognition session ended');
-      if (micActive) disableMic();
+      console.log('[VOICE PIPELINE] SpeechRecognition: onend (Recognition session ended)');
+      if (micActive && speechRec === rec) {
+        console.log('[VOICE PIPELINE] SpeechRecognition automatically restarting for continuous listening...');
+        try { rec.start(); } catch(e){}
+      }
     };
 
     return rec;
@@ -2395,7 +2419,8 @@
       micStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
-      console.log('[VOICE PIPELINE] Stage 2: Microphone initialized');
+      const track = micStream.getAudioTracks()[0];
+      console.log('[VOICE PIPELINE] Stage 2: Microphone initialized (Device: ' + (track ? track.label : 'Default Input') + ')');
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const src = audioCtx.createMediaStreamSource(micStream);
       analyser = audioCtx.createAnalyser();
