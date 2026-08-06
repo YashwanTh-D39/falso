@@ -1791,7 +1791,7 @@
   }
 
   async function playServerTTS(text) {
-    console.log('[VOICE PIPELINE] Stage 7: TTS synthesis -> requesting audio for:', text.substring(0, 60));
+    console.log('[TTS AUDIT Stage 1] Frontend calling POST /api/v1/voice/tts for text: ' + JSON.stringify(text.substring(0, 50)));
     try {
       const res = await fetch(API_BASE + '/voice/tts', {
         method: 'POST',
@@ -1800,26 +1800,33 @@
       });
       if (res.ok) {
         const audioBlob = await res.blob();
+        console.log(`[TTS AUDIT Stage 7] Frontend received ${audioBlob.size} audio bytes from backend (type: ${audioBlob.type})`);
+        if (audioBlob.size === 0) {
+          console.warn('[TTS AUDIT Stage 7 Warning] Backend returned 0 audio bytes');
+          return false;
+        }
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
         currentAudioSource = audio;
-        console.log('[VOICE PIPELINE] Stage 8: Audio playback -> starting speaker playback via Server TTS (ElevenLabs/Local)');
+        console.log('[TTS AUDIT Stage 8] Starting HTML5 Audio speaker playback...');
         setState('speaking');
         audio.onended = () => {
-          console.log('[VOICE PIPELINE] Audio playback completed');
+          console.log('[TTS AUDIT Stage 8] Audio speaker playback finished cleanly');
           setState('idle');
           currentAudioSource = null;
         };
         audio.onerror = (e) => {
-          console.error('[VOICE PIPELINE] Stage 8 Failure: Audio playback error ->', e);
+          console.error('[TTS AUDIT Stage 8 Failure] HTML5 Audio element error ->', e);
           setState('idle');
           currentAudioSource = null;
         };
         await audio.play();
         return true;
+      } else {
+        console.error(`[TTS AUDIT Stage 1 Failure] Backend /voice/tts returned HTTP status ${res.status}`);
       }
     } catch(e) {
-      console.warn('[VOICE PIPELINE] Server TTS endpoint unavailable, falling back to client Web Audio synthesis:', e);
+      console.warn('[TTS AUDIT Stage 1 Failure] Fetch /voice/tts network exception ->', e);
     }
     return false;
   }

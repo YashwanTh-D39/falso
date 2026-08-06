@@ -20,8 +20,14 @@ class TTSRequest(BaseModel):
 
 @router.post("/tts")
 async def text_to_speech(request: TTSRequest):
+    logger.info("[TTS AUDIT Stage 1] POST /api/v1/voice/tts called for text length=%d", len(request.text))
+    active_engine = getattr(voice_service.tts_engine, "name", "unknown")
+    has_key = bool(getattr(voice_service.tts_engine, "api_key", False))
+    logger.info("[TTS AUDIT Stage 2 & 3] Active TTS Provider: %s | ELEVENLABS_API_KEY Loaded: %s", active_engine, has_key)
+
     result = await voice_service.synthesize_speech(request.text)
     media_type = "audio/mpeg" if result.format == "mp3" else "audio/wav"
+    logger.info("[TTS AUDIT Stage 6] Returning %d audio bytes to frontend (media_type=%s)", len(result.audio_data), media_type)
     return Response(content=result.audio_data, media_type=media_type)
 
 

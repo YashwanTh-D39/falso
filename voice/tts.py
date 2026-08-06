@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import io
+import asyncio
 import logging
-import math
-import struct
-import wave
+import os
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from voice.base import BaseTTSEngine, TTSResult
@@ -12,39 +12,54 @@ from voice.base import BaseTTSEngine, TTSResult
 logger = logging.getLogger(__name__)
 
 
-def _generate_wav_sine(duration_seconds: float = 1.0, freq: float = 440.0, sample_rate: int = 22050) -> bytes:
-    """Generate valid PCM WAV audio data for speech synthesis fallback."""
-    num_samples = int(sample_rate * duration_seconds)
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        
-        # Synthesize simple tone sequence
-        for i in range(num_samples):
-            t = float(i) / sample_rate
-            value = int(16000.0 * math.sin(2.0 * math.pi * freq * t))
-            wav_file.writeframes(struct.pack("<h", value))
-            
-    return buf.getvalue()
-
-
 class LocalTTSEngine(BaseTTSEngine):
-    """Text-to-speech engine with audio frame synthesis."""
+    """Text-to-speech engine using pyttsx3 system TTS synthesis."""
+
+    name = "local"
 
     async def synthesize(self, text: str, **kwargs: Any) -> TTSResult:
         clean_text = text.strip()
         if not clean_text:
             return TTSResult(audio_data=b"", format="wav", duration_seconds=0.0)
 
-        duration = max(0.5, min(10.0, len(clean_text) * 0.05))
-        logger.info("Synthesizing audio for text length=%d (duration=%.2fs)", len(clean_text), duration)
-        
-        audio_data = _generate_wav_sine(duration_seconds=duration)
+        logger.info("[TTS AUDIT Stage 5] LocalTTSEngine synthesizing speech text: %r", clean_text[:60])
+
+        try:
+            import pyttsx3
+
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+                tmp_path = tmp_file.name
+
+            try:
+                engine = pyttsx3.init()
+                engine.save_to_file(clean_text, tmp_path)
+                engine.runAndWait()
+
+                if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+                    audio_bytes = await asyncio.to_thread(Path(tmp_path).read_bytes)
+                    duration = max(0.5, len(audio_bytes) / 44100.0)
+                    logger.info(
+                        "[TTS AUDIT Stage 6] LocalTTSEngine generated %d audio bytes (WAV spoken audio)",
+                        len(audio_bytes),
+                    )
+                    return TTSResult(
+                        audio_data=audio_bytes,
+                        format="wav",
+                        sample_rate=22050,
+                        duration_seconds=duration,
+                    )
+            finally:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("Could not cleanup temp WAV file: %s", exc)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[TTS AUDIT Stage 5 Failure] pyttsx3 local synthesis failed (%s)", exc)
+
         return TTSResult(
-            audio_data=audio_data,
+            audio_data=b"",
             format="wav",
             sample_rate=22050,
-            duration_seconds=duration,
+            duration_seconds=0.0,
         )

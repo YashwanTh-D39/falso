@@ -67,7 +67,7 @@ class ElevenLabsTTSEngine(BaseTTSEngine):
             return TTSResult(audio_data=b"", format="mp3", duration_seconds=0.0)
 
         if not self.api_key:
-            logger.info("ELEVENLABS_API_KEY not configured — using LocalTTSEngine fallback")
+            logger.info("[TTS AUDIT Stage 3] ELEVENLABS_API_KEY unconfigured — triggering Stage 5 LocalTTSEngine fallback")
             return await self.fallback_engine.synthesize(clean_text, **kwargs)
 
         url = f"{ELEVENLABS_BASE_URL}/{self.voice_id}"
@@ -85,13 +85,15 @@ class ElevenLabsTTSEngine(BaseTTSEngine):
             resp = await client.post(url, json=payload)
             if resp.status_code != 200:
                 logger.warning(
-                    "ElevenLabs API returned status %d — using LocalTTSEngine fallback",
+                    "[TTS AUDIT Stage 4] ElevenLabs API error status=%d (%r) — triggering Stage 5 LocalTTSEngine fallback",
                     resp.status_code,
+                    resp.text[:120],
                 )
                 return await self.fallback_engine.synthesize(clean_text, **kwargs)
 
             audio_bytes = resp.content
             duration = max(0.5, len(clean_text) * 0.06)
+            logger.info("[TTS AUDIT Stage 4] ElevenLabs TTS success: generated %d MP3 audio bytes", len(audio_bytes))
             return TTSResult(
                 audio_data=audio_bytes,
                 format="mp3",
@@ -99,7 +101,7 @@ class ElevenLabsTTSEngine(BaseTTSEngine):
                 duration_seconds=duration,
             )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("ElevenLabs connection error (%s) — using LocalTTSEngine fallback", exc)
+            logger.warning("[TTS AUDIT Stage 4 Failure] ElevenLabs connection error (%s) — triggering Stage 5 LocalTTSEngine fallback", exc)
             return await self.fallback_engine.synthesize(clean_text, **kwargs)
 
     async def stream_speech(
