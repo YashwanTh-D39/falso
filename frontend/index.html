@@ -142,23 +142,24 @@
             font-size: 12px;
         }
 
-        /* Chat Area */
+        /* Compact Left Chat Panel */
         #chat-area {
             position: absolute;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 60%;
-            max-width: 800px;
-            max-height: 40vh;
+            top: 90px;
+            left: 20px;
+            width: 360px;
+            height: calc(100vh - 170px);
             overflow-y: auto;
             pointer-events: auto;
             display: flex;
             flex-direction: column;
             gap: 10px;
-            padding: 10px;
-            mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
-            -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+            padding: 14px;
+            background: var(--color-glass);
+            border: 1px solid var(--color-glass-border);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border-radius: 8px;
         }
 
         .message {
@@ -193,16 +194,14 @@
             100% { opacity: 0.5; }
         }
 
-        /* Input Bar */
+        /* Compact Left Input Bar */
         #command-bar {
             position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 60%;
-            max-width: 800px;
+            bottom: 25px;
+            left: 20px;
+            width: 360px;
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
 
         input[type="text"] {
@@ -1558,6 +1557,27 @@
         const glowMat = new THREE.MeshBasicMaterial({ color: C_HOT, transparent: true, opacity: 0.4 });
         const glowCore = new THREE.Mesh(glowGeo, glowMat);
         orbGroup.add(glowCore);
+
+        // Thin Neon Orbital Rings for Real Entity Nodes
+        const ringColors = [0x00E5FF, 0x4DA6FF, 0x7DF9FF, 0x00BFFF];
+        [3.4, 4.4, 5.4, 6.4].forEach((radius, idx) => {
+            const points = [];
+            const segments = 64;
+            for (let i = 0; i <= segments; i++) {
+                const theta = (i / segments) * Math.PI * 2;
+                points.push(new THREE.Vector3(Math.cos(theta) * radius, 0, Math.sin(theta) * radius));
+            }
+            const circleGeo = new THREE.BufferGeometry().setFromPoints(points);
+            const ringMat = new THREE.LineBasicMaterial({
+                color: ringColors[idx],
+                transparent: true,
+                opacity: 0.25 - (idx * 0.04),
+                blending: THREE.AdditiveBlending
+            });
+            const ringLine = new THREE.LineLoop(circleGeo, ringMat);
+            ringLine.rotation.x = Math.PI * 0.05 * (idx % 2 === 0 ? 1 : -1);
+            scene.add(ringLine);
+        });
 
         // Feature Flags for Spatial OS
         const ENABLE_SPATIAL_OS = true;
