@@ -12,7 +12,7 @@ from voice.tts import LocalTTSEngine
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ELEVENLABS_VOICE = "21m00Tcm4TlvDq8ikWAM"
+DEFAULT_ELEVENLABS_VOICE = "EXAVITQu4vr4xnSDxMaL"  # Bella / Sarah: Warm, natural, medium pitch
 DEFAULT_ELEVENLABS_MODEL = "eleven_monolingual_v1"
 ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1/text-to-speech"
 
@@ -76,9 +76,9 @@ class ElevenLabsTTSEngine(BaseTTSEngine):
             "text": clean_text,
             "model_id": self.model_id,
             "voice_settings": {
-                "stability": 0.55,
+                "stability": 0.65,
                 "similarity_boost": 0.75,
-                "style": 0.15,
+                "style": 0.20,
                 "use_speaker_boost": True
             },
         }

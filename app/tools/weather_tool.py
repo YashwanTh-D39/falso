@@ -130,9 +130,9 @@ class WeatherTool(Tool):
             )
 
             formatted_response = (
-                f"The current weather in {city_name}"
-                f"{', ' + country if country else ''} is {temp_c}°C ({temp_f}°F), "
-                f"{condition.lower()} with winds at {windspeed} km/h."
+                f"Today's weather in {city_name} is {int(temp_c)}°C with {condition.lower()}.\n"
+                f"Winds are blowing at {int(windspeed)} km/h.\n"
+                f"The weather should remain pleasant throughout the day."
             )
 
             logger.info("[WEATHER] Step 5: LLM response -> %r", formatted_response)
