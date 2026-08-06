@@ -7,6 +7,7 @@ from voice.service import VoiceService
 from voice.stt import LocalSTTEngine
 from voice.transport import BaseVoiceTransport, WebAudioHTTPTransport
 from voice.tts import LocalTTSEngine
+from voice.vad import SileroVADService
 
 __all__ = [
     "AudioBuffer",
@@ -17,6 +18,7 @@ __all__ = [
     "LocalSTTEngine",
     "LocalTTSEngine",
     "STTResult",
+    "SileroVADService",
     "TTSResult",
     "VoiceConfig",
     "VoiceConversationOrchestrator",

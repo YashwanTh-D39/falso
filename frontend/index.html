@@ -489,10 +489,10 @@
             <div class="form-group">
                 <label>MIN SPEECH DURATION</label>
                 <select id="set-vad-duration">
-                    <option value="300" selected>300 ms (Default)</option>
-                    <option value="200">200 ms (Fast Response)</option>
-                    <option value="450">450 ms (Noise Resistant)</option>
-                    <option value="600">600 ms (Strict Filtering)</option>
+                    <option value="400" selected>400 ms (Silero VAD Standard)</option>
+                    <option value="300">300 ms (Fast Response)</option>
+                    <option value="500">500 ms (Noise Resistant)</option>
+                    <option value="650">650 ms (Strict Filtering)</option>
                 </select>
             </div>
             <div class="form-group">
@@ -735,12 +735,25 @@
 
         let activeProvider = "Ollama";
         let activeModel = "gemma3:4b";
+        let sileroStatus = "ACTIVE (Silero ONNX V5)";
+        let sileroSpeechDetected = "NO (0.00)";
+        let sileroNonSpeechIgnored = 0;
+        let sileroInterruptTriggered = 0;
 
         function updateDiagnosticsUI() {
             const diag = document.getElementById('diag-content');
             if (!diag) return;
             const mem = performance.memory ? (performance.memory.usedJSHeapSize/1048576).toFixed(0) : '1024';
-            diag.innerHTML = `Provider:<br>${escHtml(activeProvider)}<br><br>Model:<br>${escHtml(activeModel)}<br><br>SYS.MEM: ${mem} MB<br>STATE: ${(sysState || 'IDLE').toUpperCase()}`;
+            diag.innerHTML = `
+                Provider: ${escHtml(activeProvider)}<br>
+                Model: ${escHtml(activeModel)}<br>
+                Silero Status: ${escHtml(sileroStatus)}<br>
+                Speech Detected: ${escHtml(sileroSpeechDetected)}<br>
+                Non-Speech Ignored: ${sileroNonSpeechIgnored}<br>
+                Interrupt Triggered: ${sileroInterruptTriggered}<br>
+                SYS.MEM: ${mem} MB<br>
+                STATE: ${(sysState || 'IDLE').toUpperCase()}
+            `;
         }
 
         function changeState(newState) {
@@ -974,9 +987,10 @@
         }
 
         /* ─── Smart VAD & Interruption Engine ─── */
+        /* ─── Silero VAD & Interruption Engine ─── */
         window.smartVadConfig = {
             sensitivity: 'balanced',
-            minDurationMs: 300,
+            minDurationMs: 400,
             confidenceThreshold: 0.75,
             vadThreshold: 18.0,
             noiseFloorMultiplier: 1.5
@@ -997,181 +1011,70 @@
         }
 
         let ambientNoiseFloor = 8.0;
-        let speechStartTime = 0;
+        let lastSileroCheckTime = 0;
+        let isSileroProcessing = false;
 
-        function calculateSpeechFormantEnergy() {
-            if (!analyser || !dataArray) return { speechEnergy: 0, rawAvg: 0 };
-            analyser.getByteFrequencyData(dataArray);
-
-            let sumTotal = 0;
-            let formantSum = 0;
-            let formantBins = 0;
-            let noisePenaltySum = 0;
-            let noiseBins = 0;
-
-            // FFT 512 at 48kHz: Bins 3-35 correspond to ~280Hz-3300Hz (Human Vocal Formants)
-            // Bins <3: AC/Fan hum. Bins >40: Keyboard/mouse click impulses.
-            for (let i = 0; i < dataArray.length; i++) {
-                const val = dataArray[i];
-                sumTotal += val;
-
-                if (i >= 3 && i <= 35) {
-                    formantSum += val;
-                    formantBins++;
-                } else {
-                    noisePenaltySum += val;
-                    noiseBins++;
-                }
-            }
-
-            const rawAvg = sumTotal / dataArray.length;
-            const formantAvg = formantBins > 0 ? (formantSum / formantBins) : 0;
-            const noiseAvg = noiseBins > 0 ? (noisePenaltySum / noiseBins) : 0;
-
-            const speechEnergy = Math.max(0, formantAvg - (noiseAvg * 0.4));
-            return { speechEnergy, rawAvg };
-        }
-
-        // STT Web Speech (Continuous Hands-Free)
-        function initSpeechRecognition() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) return null;
-            
-            const rec = new SpeechRecognition();
-            rec.continuous = true;
-            rec.interimResults = true;
-            
-            rec.onstart = () => {
-                console.log("STT Continuous Listening Started");
-                if (sysState !== 'speaking' && sysState !== 'thinking') {
-                    changeState('listening');
-                }
-            };
-            rec.onresult = (event) => {
-                // Neural Speech Interruption: Check interim results if user speaks mid-speech
-                if (sysState === 'speaking' || isSpeakingSpeech) {
-                    let interimText = '';
-                    let highestConf = 0.85;
-
-                    for (let i = event.resultIndex; i < event.results.length; ++i) {
-                        const res = event.results[i];
-                        if (res && res[0]) {
-                            interimText += res[0].transcript;
-                            if (res[0].confidence > 0) highestConf = res[0].confidence;
-                        }
-                    }
-
-                    if (interimText.trim().length > 0 && highestConf >= smartVadConfig.confidenceThreshold) {
-                        console.log(`[SMART STT INTERRUPT] Neural speech detected: "${interimText.trim()}" (conf=${highestConf.toFixed(2)}) -> Instant Interruption!`);
-                        triggerVoiceInterruption();
-                        return;
-                    }
-                    console.log('[STT ECHO GUARD] Ignoring non-speech background sound while speaking');
-                    return;
-                }
-
-                if (sysState === 'thinking') {
-                    console.log('[STT ECHO GUARD] Ignoring transcript while FALSO is thinking');
-                    return;
-                }
-
-                let finalTrans = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) {
-                        finalTrans += event.results[i][0].transcript;
-                    }
-                }
-                if (finalTrans.trim()) {
-                    lastSpeechTime = Date.now();
-                    const text = finalTrans.trim();
-                    console.log('[STT FINAL RESULT]:', text);
-
-                    // Wake word architecture filter
-                    if (window.wakeWordMode) {
-                        const lower = text.toLowerCase();
-                        const matched = window.wakeWords.find(w => lower.startsWith(w) || lower.includes(w));
-                        if (!matched) {
-                            console.log('[WAKE WORD] Heard speech without wake word -> ignoring:', text);
-                            return;
-                        }
-                        const cleanText = text.replace(new RegExp('^.*?' + matched, 'i'), '').trim();
-                        if (!cleanText) {
-                            speak("Yes Sir, I am listening.");
-                            return;
-                        }
-                        sendToFalso(cleanText);
-                    } else {
-                        sendToFalso(text);
-                    }
-                }
-            };
-            rec.onerror = (e) => {
-                if (e.error === 'no-speech') {
-                    if (micActive && sysState !== 'speaking' && sysState !== 'thinking') {
-                        try { rec.start(); } catch(_) {}
-                    }
-                    return;
-                }
-                console.error("STT Error", e.error);
-                if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-                    document.getElementById('mic-permission-overlay').style.display = 'flex';
-                    changeState('error');
-                }
-            };
-            rec.onend = () => {
-                if (micActive && sysState !== 'speaking' && sysState !== 'thinking') {
-                    try { rec.start(); } catch(_) {}
-                }
-            };
-            
-            return rec;
-        }
-
-        window.requestMicPermission = async () => {
-            document.getElementById('mic-permission-overlay').style.display = 'none';
-            await enableMic();
-        };
-
-        async function enableMic() {
-            stopActiveAudioPlayback();
-            if (!speechRec) speechRec = initSpeechRecognition();
+        async function processAudioWithSileroVad() {
+            if (isSileroProcessing || !analyser) return;
+            isSileroProcessing = true;
             try {
-                // DSP Hardware AEC, ANS, AGC constraints
-                const audioConstraints = {
-                    audio: {
-                        echoCancellation: { ideal: true },
-                        noiseSuppression: { ideal: true },
-                        autoGainControl: { ideal: true },
-                        channelCount: 1,
-                        sampleRate: 48000
+                // Extract 512 PCM samples from analyzer for Silero VAD (16kHz 16-bit mono)
+                const pcmBuffer = new Int16Array(512);
+                const timeDomainData = new Float32Array(512);
+                if (analyser.getFloatTimeDomainData) {
+                    analyser.getFloatTimeDomainData(timeDomainData);
+                    for (let i = 0; i < 512; i++) {
+                        let s = Math.max(-1, Math.min(1, timeDomainData[i]));
+                        pcmBuffer[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                     }
-                };
-                const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                const source = audioContext.createMediaStreamSource(stream);
-                source.connect(analyser);
-                analyser.fftSize = 512;
-                dataArray = new Uint8Array(analyser.frequencyBinCount);
-                
-                micActive = true;
-                document.getElementById('mic-permission-overlay').style.display = 'none';
-                changeState('listening');
-                if (speechRec) {
-                    try { speechRec.start(); } catch(_) {}
                 }
-                pollMic();
+
+                const u8 = new Uint8Array(pcmBuffer.buffer);
+                let binaryStr = '';
+                for (let i = 0; i < u8.length; i++) binaryStr += String.fromCharCode(u8[i]);
+                const base64Audio = btoa(binaryStr);
+
+                const res = await fetch(API_BASE + '/voice/vad', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        audio_base64: base64Audio,
+                        sample_rate: 16000,
+                        threshold: smartVadConfig.confidenceThreshold,
+                        min_speech_duration_ms: smartVadConfig.minDurationMs
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.diagnostics) {
+                        sileroStatus = data.diagnostics.silero_status || sileroStatus;
+                        sileroSpeechDetected = (data.is_speech ? 'YES' : 'NO') + ' (' + (data.probability || 0).toFixed(2) + ')';
+                        sileroNonSpeechIgnored = data.diagnostics.non_speech_ignored || 0;
+                        sileroInterruptTriggered = data.diagnostics.interrupt_triggered || 0;
+                        updateDiagnosticsUI();
+                    }
+
+                    // REQUIREMENT 8: Halts TTS only when Silero confirms human speech >= 400ms
+                    if (sysState === 'speaking' && isSpeakingSpeech && data.interrupt === true) {
+                        console.log(`[SILERO VAD INTERRUPT] Silero VAD confirmed human speech (prob=${data.probability}) -> Halting TTS!`);
+                        triggerVoiceInterruption();
+                    }
+                }
             } catch(e) {
-                console.error("Mic permission error:", e);
-                document.getElementById('mic-permission-overlay').style.display = 'flex';
-                changeState('error');
+                console.warn("Silero VAD exception:", e);
+            } finally {
+                isSileroProcessing = false;
             }
         }
 
         function pollMic() {
             if (!micActive || !analyser) return;
 
-            const { speechEnergy, rawAvg } = calculateSpeechFormantEnergy();
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            let rawAvg = sum / dataArray.length;
             window.micLevel = rawAvg;
 
             // 1. Dynamic Noise Floor Profiling (Smooth tracking during idle/listening)
@@ -1181,26 +1084,14 @@
                 }
             }
 
-            // 2. SMART VAD INTERRUPTION RULE CHECK
+            // 2. SILERO VAD NEURAL SPEECH CHECK DURING TTS PLAYBACK (No raw volume interruption)
+            const now = Date.now();
             if (sysState === 'speaking' && isSpeakingSpeech) {
-                const requiredThreshold = Math.max(smartVadConfig.vadThreshold, ambientNoiseFloor * smartVadConfig.noiseFloorMultiplier);
-
-                if (speechEnergy >= requiredThreshold) {
-                    if (speechStartTime === 0) speechStartTime = Date.now();
-                    const speechDuration = Date.now() - speechStartTime;
-
-                    // Interrupt ONLY if sustained human speech lasts at least minDurationMs (e.g. 300ms)
-                    if (speechDuration >= smartVadConfig.minDurationMs) {
-                        console.log(`[SMART VAD INTERRUPT] Validated human speech (energy=${speechEnergy.toFixed(1)}, duration=${speechDuration}ms) -> Halting TTS!`);
-                        speechStartTime = 0;
-                        triggerVoiceInterruption();
-                    }
-                } else {
-                    // Reset timer on transient energy drop — ignores clicks, keypresses, mouse snaps
-                    speechStartTime = 0;
+                // Throttle Silero VAD check to every 64ms (~15 FPS) for ultra-low latency & CPU efficiency
+                if (now - lastSileroCheckTime > 64) {
+                    lastSileroCheckTime = now;
+                    processAudioWithSileroVad();
                 }
-            } else {
-                speechStartTime = 0;
             }
 
             // Wake from sleeping if audio detected
