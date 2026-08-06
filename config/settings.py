@@ -79,6 +79,7 @@ class Settings(BaseSettings):
     gpu_refresh_interval_seconds: float = Field(default=5.0, gt=0.0)
 
     # ElevenLabs Voice Integration
+    tts_provider: str = "elevenlabs"
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
     elevenlabs_model_id: str = "eleven_monolingual_v1"

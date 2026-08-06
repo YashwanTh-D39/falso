@@ -638,35 +638,68 @@
 <!-- AI Provider Settings panel (overlay) -->
 <div class="panel" id="panelSettings" style="top:50%;right:44px;transform:translate(0,-50%) translateX(24px);width:290px;z-index:90;opacity:0;pointer-events:none;transition:transform 0.45s cubic-bezier(.16,.9,.24,1),opacity 0.35s ease">
   <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center">
-    <span>AI PROVIDER SETTINGS</span>
+    <span>SYSTEM & VOICE CONFIGURATION</span>
     <span id="closeSettingsBtn" style="cursor:pointer;font-weight:700;padding:2px 6px">✕</span>
   </div>
   <div class="panel-body" style="padding:14px;display:flex;flex-direction:column;gap:12px">
-    <div>
-      <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">PRIMARY PROVIDER</label>
-      <select id="settingProvider" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
-        <option value="gemini">Gemini (Google AI Studio — Default)</option>
-        <option value="openai">OpenAI (Optional Cloud)</option>
-        <option value="ollama">Ollama (Local)</option>
-      </select>
+    <!-- AI BRAIN SECTION -->
+    <div style="border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--ember);letter-spacing:0.1em;margin-bottom:8px">AI BRAIN PROVIDER</div>
+      <div style="margin-bottom:8px">
+        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">PRIMARY PROVIDER</label>
+        <select id="settingProvider" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
+          <option value="gemini">Gemini (Google AI Studio — Default)</option>
+          <option value="openai">OpenAI (Optional Cloud)</option>
+          <option value="ollama">Ollama (Local)</option>
+        </select>
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">GEMINI API KEY</label>
+        <input type="password" id="settingGeminiKey" placeholder="Paste GEMINI_API_KEY..." style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px" />
+      </div>
+      <div>
+        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">GEMINI MODEL</label>
+        <select id="settingGeminiModel" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
+          <option value="gemini-3.6-flash">gemini-3.6-flash (Default / Fast)</option>
+          <option value="gemini-3.1-flash">gemini-3.1-flash (Ultra Fast)</option>
+          <option value="gemini-3.1-pro">gemini-3.1-pro (Deep Reasoning)</option>
+          <option value="gemini-1.5-flash">gemini-1.5-flash (Standard)</option>
+          <option value="gemini-1.5-pro">gemini-1.5-pro (Legacy Pro)</option>
+        </select>
+      </div>
     </div>
+
+    <!-- VOICE & TTS SECTION -->
     <div>
-      <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">GEMINI API KEY</label>
-      <input type="password" id="settingGeminiKey" placeholder="Paste GEMINI_API_KEY..." style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px" />
+      <div style="font-size:10px;font-weight:700;color:var(--ember);letter-spacing:0.1em;margin-bottom:8px">VOICE & TTS SYNTHESIS</div>
+      <div style="margin-bottom:8px">
+        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">TTS PROVIDER</label>
+        <select id="settingTTSProvider" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
+          <option value="elevenlabs">ElevenLabs (High Fidelity Cloud)</option>
+          <option value="edge">Edge Neural TTS</option>
+          <option value="local">Local TTS (pyttsx3 / System SAPI5)</option>
+        </select>
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">ELEVENLABS API KEY</label>
+        <div style="display:flex;gap:4px">
+          <input type="password" id="settingElevenLabsKey" placeholder="Paste ELEVENLABS_API_KEY..." style="flex:1;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px" />
+          <button id="toggleElKeyBtn" type="button" style="background:rgba(255,255,255,0.1);color:var(--white);border:1px solid var(--line);padding:4px 8px;font-size:11px;cursor:pointer" title="Show/Hide Key">👁️</button>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">ELEVENLABS VOICE</label>
+        <select id="settingElevenLabsVoice" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
+          <option value="21m00Tcm4TlvDq8ikWAM">Rachel (Default / Female)</option>
+        </select>
+      </div>
     </div>
-    <div>
-      <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">GEMINI MODEL</label>
-      <select id="settingGeminiModel" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
-        <option value="gemini-3.6-flash">gemini-3.6-flash (Default / Fast)</option>
-        <option value="gemini-3.1-flash">gemini-3.1-flash (Ultra Fast)</option>
-        <option value="gemini-3.1-pro">gemini-3.1-pro (Deep Reasoning)</option>
-        <option value="gemini-1.5-flash">gemini-1.5-flash (Standard)</option>
-        <option value="gemini-1.5-pro">gemini-1.5-pro (Legacy Pro)</option>
-      </select>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:4px">
+
+    <!-- ACTION BUTTONS -->
+    <div style="display:flex;gap:6px;margin-top:4px">
       <button id="saveSettingsBtn" style="flex:1;background:var(--ember);color:var(--bg);border:none;padding:8px;font-family:var(--f-display);font-size:10px;font-weight:700;letter-spacing:0.1em;cursor:pointer">SAVE SETTINGS</button>
-      <button id="testConnBtn" style="background:rgba(255,255,255,0.1);color:var(--white);border:1px solid var(--line);padding:8px;font-family:var(--f-mono);font-size:10px;cursor:pointer">TEST KEY</button>
+      <button id="testConnBtn" style="background:rgba(255,255,255,0.1);color:var(--white);border:1px solid var(--line);padding:6px 10px;font-family:var(--f-mono);font-size:10px;cursor:pointer">TEST AI</button>
+      <button id="testVoiceBtn" style="background:rgba(255,255,255,0.1);color:var(--white);border:1px solid var(--line);padding:6px 10px;font-family:var(--f-mono);font-size:10px;cursor:pointer">TEST VOICE</button>
     </div>
     <div id="settingsToast" style="font-size:10px;color:var(--gold);font-family:var(--f-mono);display:none;margin-top:4px"></div>
   </div>
@@ -2058,16 +2091,52 @@
     });
   });
 
-  /* ─── AI Provider Settings Panel ─── */
+  /* ─── AI & Voice Settings Panel ─── */
   const panelSettings = document.getElementById('panelSettings');
   const closeSettingsBtn = document.getElementById('closeSettingsBtn');
   const saveSettingsBtn = document.getElementById('saveSettingsBtn');
   const settingProvider = document.getElementById('settingProvider');
   const settingGeminiKey = document.getElementById('settingGeminiKey');
   const settingGeminiModel = document.getElementById('settingGeminiModel');
+  const settingTTSProvider = document.getElementById('settingTTSProvider');
+  const settingElevenLabsKey = document.getElementById('settingElevenLabsKey');
+  const toggleElKeyBtn = document.getElementById('toggleElKeyBtn');
+  const settingElevenLabsVoice = document.getElementById('settingElevenLabsVoice');
   const settingsToast = document.getElementById('settingsToast');
-
   const testConnBtn = document.getElementById('testConnBtn');
+  const testVoiceBtn = document.getElementById('testVoiceBtn');
+
+  if(toggleElKeyBtn && settingElevenLabsKey){
+    toggleElKeyBtn.addEventListener('click', ()=>{
+      if(settingElevenLabsKey.type === 'password'){
+        settingElevenLabsKey.type = 'text';
+        toggleElKeyBtn.textContent = '🙈';
+      }else{
+        settingElevenLabsKey.type = 'password';
+        toggleElKeyBtn.textContent = '👁️';
+      }
+    });
+  }
+
+  async function loadVoices(selectedVoiceId){
+    if(!settingElevenLabsVoice) return;
+    try{
+      const res = await fetch(API_BASE + '/system/voices');
+      if(res.ok){
+        const data = await res.json();
+        if(data.voices && data.voices.length > 0){
+          settingElevenLabsVoice.innerHTML = '';
+          data.voices.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.voice_id;
+            opt.textContent = v.name;
+            settingElevenLabsVoice.appendChild(opt);
+          });
+          if(selectedVoiceId) settingElevenLabsVoice.value = selectedVoiceId;
+        }
+      }
+    }catch(e){}
+  }
 
   async function openSettingsPanel(){
     if(!panelSettings) return;
@@ -2081,6 +2150,11 @@
         if(data.ai_provider) settingProvider.value = data.ai_provider;
         if(data.gemini_model) settingGeminiModel.value = data.gemini_model;
         if(data.gemini_api_key_configured) settingGeminiKey.placeholder = 'Configured (' + data.gemini_api_key_masked + ')';
+
+        if(data.tts_provider) settingTTSProvider.value = data.tts_provider;
+        if(data.elevenlabs_api_key_configured) settingElevenLabsKey.placeholder = 'Configured (' + data.elevenlabs_api_key_masked + ')';
+
+        await loadVoices(data.elevenlabs_voice_id);
       }
       const mRes = await fetch(API_BASE + '/system/models');
       if(mRes.ok){
@@ -2131,14 +2205,44 @@
     });
   }
 
+  if(testVoiceBtn){
+    testVoiceBtn.addEventListener('click', async ()=>{
+      if(settingsToast){
+        settingsToast.style.display = 'block';
+        settingsToast.textContent = 'GENERATING VOICE TEST...';
+      }
+      try{
+        testVoiceBtn.disabled = true;
+        await playServerTTS("Hello, I am FALSO. Voice configuration successful.");
+        testVoiceBtn.disabled = false;
+        if(settingsToast){
+          settingsToast.style.display = 'block';
+          settingsToast.textContent = 'VOICE TEST PLAYING';
+          setTimeout(()=> settingsToast.style.display='none', 4000);
+        }
+      }catch(e){
+        testVoiceBtn.disabled = false;
+        if(settingsToast){
+          settingsToast.style.display = 'block';
+          settingsToast.textContent = 'VOICE TEST FAILED';
+        }
+      }
+    });
+  }
+
   if(saveSettingsBtn){
     saveSettingsBtn.addEventListener('click', async ()=>{
       const payload = {
         ai_provider: settingProvider.value,
         gemini_model: settingGeminiModel.value,
+        tts_provider: settingTTSProvider.value,
+        elevenlabs_voice_id: settingElevenLabsVoice ? settingElevenLabsVoice.value : '21m00Tcm4TlvDq8ikWAM',
       };
       if(settingGeminiKey.value.trim()){
         payload.gemini_api_key = settingGeminiKey.value.trim();
+      }
+      if(settingElevenLabsKey && settingElevenLabsKey.value.trim()){
+        payload.elevenlabs_api_key = settingElevenLabsKey.value.trim();
       }
       try{
         saveSettingsBtn.disabled = true;
@@ -2154,10 +2258,11 @@
           const data = await res.json();
           if(settingsToast){
             settingsToast.style.display = 'block';
-            settingsToast.textContent = 'SETTINGS APPLIED — ' + data.ai_provider.toUpperCase() + ' ACTIVE';
+            settingsToast.textContent = 'SETTINGS APPLIED — ' + (data.tts_provider || 'ELEVENLABS').toUpperCase() + ' TTS';
             setTimeout(()=> settingsToast.style.display='none', 4000);
           }
-          speak('AI Provider settings saved. ' + data.ai_provider.toUpperCase() + ' active.', 3000);
+          speak('Voice and AI settings saved successfully.', 3000);
+          await loadVoices(data.elevenlabs_voice_id);
         }
       }catch(e){
         saveSettingsBtn.disabled = false;

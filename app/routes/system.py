@@ -49,21 +49,32 @@ class SettingsUpdateRequest(BaseModel):
     gemini_model: str | None = None
     openai_api_key: str | None = None
     elevenlabs_api_key: str | None = None
+    elevenlabs_voice_id: str | None = None
+    tts_provider: str | None = None
 
 
 @router.get("/settings")
 async def get_settings():
-    """Get active system & AI provider settings."""
+    """Get active system & AI provider & voice settings."""
     from config.settings import settings
+
+    el_key_valid = bool(settings.elevenlabs_api_key and not is_placeholder_key(settings.elevenlabs_api_key))
+    el_masked = f"...{settings.elevenlabs_api_key[-4:]}" if len(settings.elevenlabs_api_key) >= 4 else ""
+
+    gem_key_valid = bool(settings.gemini_api_key and not is_placeholder_key(settings.gemini_api_key))
+    gem_masked = f"...{settings.gemini_api_key[-4:]}" if len(settings.gemini_api_key) >= 4 else ""
 
     return {
         "ai_provider": settings.ai_provider,
         "gemini_model": settings.gemini_model,
-        "gemini_api_key_configured": bool(settings.gemini_api_key),
-        "gemini_api_key_masked": f"...{settings.gemini_api_key[-4:]}" if len(settings.gemini_api_key) >= 4 else "",
+        "gemini_api_key_configured": gem_key_valid,
+        "gemini_api_key_masked": gem_masked,
         "openai_model": settings.openai_model,
-        "openai_api_key_configured": bool(settings.openai_api_key),
-        "elevenlabs_api_key_configured": bool(settings.elevenlabs_api_key),
+        "openai_api_key_configured": bool(settings.openai_api_key and not is_placeholder_key(settings.openai_api_key)),
+        "elevenlabs_api_key_configured": el_key_valid,
+        "elevenlabs_api_key_masked": el_masked,
+        "elevenlabs_voice_id": settings.elevenlabs_voice_id,
+        "tts_provider": settings.tts_provider,
     }
 
 
@@ -75,6 +86,7 @@ INVALID_PLACEHOLDER_KEYS = {
     "changeme",
     "your_api_key",
     "your_gemini_api_key",
+    "your_elevenlabs_api_key",
     "placeholder",
 }
 
@@ -102,11 +114,16 @@ def persist_settings_to_env(target_settings, target_path: Path = Path(".env")) -
 
     try:
         content = target_path.read_text(encoding="utf-8")
-        key_to_write = target_settings.gemini_api_key if not is_placeholder_key(target_settings.gemini_api_key) else ""
+        gemini_key_to_write = target_settings.gemini_api_key if not is_placeholder_key(target_settings.gemini_api_key) else ""
+        el_key_to_write = target_settings.elevenlabs_api_key if not is_placeholder_key(target_settings.elevenlabs_api_key) else ""
+
         updates = {
             "AI_PROVIDER": target_settings.ai_provider,
-            "GEMINI_API_KEY": key_to_write,
+            "GEMINI_API_KEY": gemini_key_to_write,
             "GEMINI_MODEL": target_settings.gemini_model,
+            "ELEVENLABS_API_KEY": el_key_to_write,
+            "ELEVENLABS_VOICE_ID": target_settings.elevenlabs_voice_id,
+            "TTS_PROVIDER": target_settings.tts_provider,
         }
         for k, v in updates.items():
             pattern = re.compile(rf"^{k}=.*$", re.MULTILINE)
@@ -123,10 +140,13 @@ def persist_settings_to_env(target_settings, target_path: Path = Path(".env")) -
 
 @router.post("/settings")
 async def update_settings(request: SettingsUpdateRequest):
-    """Update runtime AI provider settings, persist to .env (outside tests), and re-instantiate provider."""
+    """Update runtime AI provider & voice settings, persist to .env (outside tests), and re-instantiate engines."""
     from app.providers.factory import build_provider
     from app.routes.brain import brain_service
+    from app.routes.voice import voice_service
     from config.settings import settings
+    from voice.elevenlabs import ElevenLabsTTSEngine
+    from voice.tts import LocalTTSEngine
 
     if request.ai_provider is not None:
         settings.ai_provider = request.ai_provider.strip().lower()
@@ -134,27 +154,104 @@ async def update_settings(request: SettingsUpdateRequest):
         key_candidate = request.gemini_api_key.strip()
         if is_placeholder_key(key_candidate):
             logger.warning("Rejected placeholder GEMINI_API_KEY from persistence: %s", key_candidate)
-        settings.gemini_api_key = key_candidate
+        else:
+            settings.gemini_api_key = key_candidate
     if request.gemini_model is not None:
         settings.gemini_model = request.gemini_model.strip()
     if request.openai_api_key is not None:
         settings.openai_api_key = request.openai_api_key.strip()
-    if request.elevenlabs_api_key is not None:
-        settings.elevenlabs_api_key = request.elevenlabs_api_key.strip()
 
-    # Dynamic provider re-binding
+    # ElevenLabs & Voice settings
+    if request.elevenlabs_api_key is not None:
+        el_candidate = request.elevenlabs_api_key.strip()
+        if is_placeholder_key(el_candidate):
+            logger.warning("Rejected placeholder ELEVENLABS_API_KEY from persistence: %s", el_candidate)
+        else:
+            settings.elevenlabs_api_key = el_candidate
+    if request.elevenlabs_voice_id is not None:
+        settings.elevenlabs_voice_id = request.elevenlabs_voice_id.strip()
+    if request.tts_provider is not None:
+        settings.tts_provider = request.tts_provider.strip().lower()
+
+    # Dynamic AI provider re-binding
     brain_service.provider = build_provider(settings)
     logger.info("Re-bound BrainService provider to %s (%s)", brain_service.provider.name, brain_service.provider.model)
 
+    # Dynamic TTS engine re-binding
+    if settings.tts_provider == "elevenlabs" and settings.elevenlabs_api_key and not is_placeholder_key(settings.elevenlabs_api_key):
+        voice_service.tts_engine = ElevenLabsTTSEngine(
+            api_key=settings.elevenlabs_api_key,
+            voice_id=settings.elevenlabs_voice_id,
+        )
+        logger.info("Re-bound VoiceService TTS engine to ElevenLabs (voice_id=%s)", settings.elevenlabs_voice_id)
+    else:
+        voice_service.tts_engine = LocalTTSEngine()
+        logger.info("Re-bound VoiceService TTS engine to LocalTTSEngine")
+
     # Persist settings using helper
     persist_settings_to_env(settings)
+
+    el_configured = bool(settings.elevenlabs_api_key and not is_placeholder_key(settings.elevenlabs_api_key))
 
     return {
         "status": "updated",
         "ai_provider": settings.ai_provider,
         "gemini_model": settings.gemini_model,
         "gemini_api_key_configured": bool(settings.gemini_api_key and not is_placeholder_key(settings.gemini_api_key)),
+        "elevenlabs_api_key_configured": el_configured,
+        "elevenlabs_voice_id": settings.elevenlabs_voice_id,
+        "tts_provider": settings.tts_provider,
     }
+
+
+@router.get("/voices")
+async def get_elevenlabs_voices():
+    """Fetch available ElevenLabs voices dynamically via ElevenLabs API."""
+    import httpx
+
+    from config.settings import settings
+
+    key = settings.elevenlabs_api_key
+    default_voices = [
+        {"voice_id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel (Default / Female)"},
+        {"voice_id": "AZnzlk1XvdvUeBnXmlld", "name": "Domi (Female)"},
+        {"voice_id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella (Female)"},
+        {"voice_id": "ErXwobaYiN019PkySvjV", "name": "Antoni (Male)"},
+        {"voice_id": "MF3mGyEYCl7XYWbV9V6O", "name": "Elli (Female)"},
+        {"voice_id": "TxGEqnHWrfWFTfGW9XjX", "name": "Josh (Male)"},
+        {"voice_id": "VR6AewLTigWG4xTvo155", "name": "Arnold (Male)"},
+        {"voice_id": "pNInz6obpgDQGcFmaJgB", "name": "Adam (Male)"},
+        {"voice_id": "yoZ06aGfM25m30UU3Cgh", "name": "Sam (Male)"},
+    ]
+
+    if not key or is_placeholder_key(key):
+        logger.info("ElevenLabs key unconfigured or placeholder — returning default voices")
+        return {"voices": default_voices}
+
+    try:
+        url = "https://api.elevenlabs.io/v1/voices"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers={"xi-api-key": key})
+            if resp.status_code == 200:
+                data = resp.json()
+                raw_voices = data.get("voices", [])
+                formatted = [
+                    {
+                        "voice_id": v.get("voice_id"),
+                        "name": f"{v.get('name')} ({v.get('category', 'custom').title()})",
+                    }
+                    for v in raw_voices
+                    if v.get("voice_id") and v.get("name")
+                ]
+                if formatted:
+                    logger.info("Voice list fetched successfully from ElevenLabs (%d voices found)", len(formatted))
+                    return {"voices": formatted}
+            else:
+                logger.warning("ElevenLabs voices API status=%d: %s", resp.status_code, resp.text[:100])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not fetch ElevenLabs voices: %s", exc)
+
+    return {"voices": default_voices}
 
 
 @router.get("/models")
