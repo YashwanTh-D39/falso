@@ -43,59 +43,84 @@ from app.services.boot_tracker import boot_tracker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # [1/10] Config loaded
-    t0 = time.time()
+    # [1] Configuration
+    boot_tracker.start_stage(1)
     setup_logging()
-    boot_tracker.log_stage(1, time.time() - t0)
+    boot_tracker.end_stage(1)
 
-    # [2/10] Database initialized
-    t0 = time.time()
-    from app.services.filesystem_indexer import filesystem_indexer
-    _ = filesystem_indexer.db_manager
-    boot_tracker.log_stage(2, time.time() - t0)
+    # [2] Database
+    boot_tracker.start_stage(2)
+    try:
+        from app.services.filesystem_indexer import filesystem_indexer
+        _ = filesystem_indexer.db_manager
+        boot_tracker.end_stage(2)
+    except Exception as exc:
+        boot_tracker.fail_stage(2, str(exc))
 
-    # [3/10] Ollama connection verified
-    t0 = time.time()
+    # [3] Ollama
+    boot_tracker.start_stage(3)
     if settings.ai_provider == "ollama":
         try:
             import httpx
             async with httpx.AsyncClient(timeout=1.5) as client:
-                res = await client.get(f"{settings.ollama_base_url}/api/tags")
-                status_msg = f"Ollama Online ({settings.ollama_model})" if res.status_code == 200 else f"Ollama Status {res.status_code}"
-                boot_tracker.log_stage(3, time.time() - t0, status_msg)
+                res = await asyncio.wait_for(
+                    client.get(f"{settings.ollama_base_url}/api/tags"),
+                    timeout=2.0
+                )
+                msg = f"Ollama Online ({settings.ollama_model})" if res.status_code == 200 else f"HTTP {res.status_code}"
+                boot_tracker.end_stage(3, msg)
         except Exception as exc:
-            boot_tracker.log_stage(3, time.time() - t0, f"Ollama Offline ({exc})")
+            boot_tracker.end_stage(3, f"Ollama Offline ({exc})")
     else:
-        boot_tracker.log_stage(3, time.time() - t0, f"Provider: {settings.ai_provider}")
+        boot_tracker.end_stage(3, f"Provider: {settings.ai_provider}")
 
-    # [4/10] Filesystem indexer started
-    t0 = time.time()
+    # [4] Voice
+    boot_tracker.start_stage(4)
+    try:
+        from app.routes.voice import voice_service
+        _ = voice_service
+        boot_tracker.end_stage(4)
+    except Exception as exc:
+        boot_tracker.fail_stage(4, str(exc))
+
+    # [5] Web Intelligence
+    boot_tracker.start_stage(5)
+    try:
+        from app.routes.brain import brain_service
+        _ = brain_service
+        boot_tracker.end_stage(5, "Tools Registered")
+    except Exception as exc:
+        boot_tracker.fail_stage(5, str(exc))
+
+    # [6] Filesystem Indexer (Non-blocking background async start)
+    boot_tracker.start_stage(6)
     if settings.enable_filesystem_indexer:
-        filesystem_indexer.start()
-    boot_tracker.log_stage(4, time.time() - t0, "Indexer Active" if settings.enable_filesystem_indexer else "Disabled by Flag")
+        asyncio.create_task(asyncio.to_thread(filesystem_indexer.start))
+        boot_tracker.end_stage(6, "Background Async Start")
+    else:
+        boot_tracker.end_stage(6, "Disabled by Flag")
 
-    # [5/10] Watchdog started
-    t0 = time.time()
-    boot_tracker.log_stage(5, time.time() - t0, "Watchdog Active" if settings.enable_watchdog else "Disabled by Flag")
-
-    # [6/10] Spatial broadcaster started
-    t0 = time.time()
+    # [7] Spatial Service (Non-blocking background async start)
+    boot_tracker.start_stage(7)
     if settings.enable_spatial_os:
         asyncio.create_task(spatial_broadcaster_loop())
         asyncio.create_task(proactive_agent.start_monitoring_loop())
-    boot_tracker.log_stage(6, time.time() - t0, "Spatial Active" if settings.enable_spatial_os else "Disabled by Flag")
+        boot_tracker.end_stage(7, "Background Async Start")
+    else:
+        boot_tracker.end_stage(7, "Disabled by Flag")
 
-    # [7/10] WebSocket initialized
-    t0 = time.time()
-    from app.routes.spatial_ws import ws_manager
-    _ = ws_manager
-    boot_tracker.log_stage(7, time.time() - t0)
+    # [8] WebSocket
+    boot_tracker.start_stage(8)
+    try:
+        from app.routes.spatial_ws import ws_manager
+        _ = ws_manager
+        boot_tracker.end_stage(8)
+    except Exception as exc:
+        boot_tracker.fail_stage(8, str(exc))
 
-    # [8/10] Voice services initialized
-    t0 = time.time()
-    from app.routes.voice import voice_service
-    _ = voice_service
-    boot_tracker.log_stage(8, time.time() - t0)
+    # [9] Living Orb
+    boot_tracker.start_stage(9)
+    boot_tracker.end_stage(9, "Awaiting Frontend Handshake")
 
     # Non-blocking background warmup for local LLM
     if settings.ai_provider == "ollama":
@@ -109,7 +134,7 @@ async def lifespan(app: FastAPI):
 
         asyncio.create_task(_warmup())
 
-    logger.info("Falso Core API booted successfully — waiting for frontend handshake...")
+    logger.info("Falso Core API booted successfully — ready for frontend connection.")
 
     try:
         yield

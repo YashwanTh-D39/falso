@@ -90,12 +90,12 @@ async def get_boot_status():
 @router.post("/handshake")
 async def complete_handshake():
     """Completes stages 9 and 10 when frontend handshake connects."""
-    import time
     from app.services.boot_tracker import boot_tracker
     if not boot_tracker.is_complete:
-        delta_handshake = time.time() - boot_tracker.last_stage_time
-        boot_tracker.log_stage(9, delta_handshake, "Frontend Handshake Received")
-        boot_tracker.log_stage(10, 0.01, "BOOT COMPLETE")
+        boot_tracker.start_stage(9)
+        boot_tracker.end_stage(9, "Frontend Handshake Received")
+        boot_tracker.start_stage(10)
+        boot_tracker.end_stage(10, "Frontend Ready")
     return boot_tracker.get_boot_status()
 
 
