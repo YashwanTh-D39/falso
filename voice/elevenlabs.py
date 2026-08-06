@@ -62,12 +62,13 @@ class ElevenLabsTTSEngine(BaseTTSEngine):
             self._client = None
 
     async def synthesize(self, text: str, **kwargs: Any) -> TTSResult:
-        clean_text = text.strip()
+        from voice.cleaner import clean_text_for_speech
+        clean_text = clean_text_for_speech(text)
         if not clean_text:
             return TTSResult(audio_data=b"", format="mp3", duration_seconds=0.0)
 
         if not self.api_key:
-            logger.info("[TTS AUDIT Stage 3] ELEVENLABS_API_KEY unconfigured — triggering Stage 5 LocalTTSEngine fallback")
+            logger.info("[TTS]\nProvider: Local TTS (Fallback)\nVoice: Windows SAPI5\nLatency: 0ms")
             return await self.fallback_engine.synthesize(clean_text, **kwargs)
 
         url = f"{ELEVENLABS_BASE_URL}/{self.voice_id}"
@@ -75,25 +76,32 @@ class ElevenLabsTTSEngine(BaseTTSEngine):
             "text": clean_text,
             "model_id": self.model_id,
             "voice_settings": {
-                "stability": 0.5,
+                "stability": 0.55,
                 "similarity_boost": 0.75,
+                "style": 0.15,
+                "use_speaker_boost": True
             },
         }
 
+        start_t = time.perf_counter()
         try:
             client = self._get_client()
             resp = await client.post(url, json=payload)
+            latency_ms = round((time.perf_counter() - start_t) * 1000, 1)
+
             if resp.status_code != 200:
                 logger.warning(
-                    "[TTS AUDIT Stage 4] ElevenLabs API error status=%d (%r) — triggering Stage 5 LocalTTSEngine fallback",
-                    resp.status_code,
-                    resp.text[:120],
+                    "[TTS]\nProvider: Local TTS (Fallback)\nVoice: Windows SAPI5\nLatency: %.1fms\nReason: ElevenLabs HTTP %d",
+                    latency_ms, resp.status_code
                 )
                 return await self.fallback_engine.synthesize(clean_text, **kwargs)
 
             audio_bytes = resp.content
             duration = max(0.5, len(clean_text) * 0.06)
-            logger.info("[TTS] ElevenLabs synthesized %d audio bytes", len(audio_bytes))
+            logger.info(
+                "[TTS]\nProvider: ElevenLabs\nVoice: %s\nLatency: %.1fms",
+                self.voice_id, latency_ms
+            )
             return TTSResult(
                 audio_data=audio_bytes,
                 format="mp3",
@@ -101,7 +109,8 @@ class ElevenLabsTTSEngine(BaseTTSEngine):
                 duration_seconds=duration,
             )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("[TTS AUDIT Stage 4 Failure] ElevenLabs connection error (%s) — triggering Stage 5 LocalTTSEngine fallback", exc)
+            latency_ms = round((time.perf_counter() - start_t) * 1000, 1)
+            logger.warning("[TTS]\nProvider: Local TTS (Fallback)\nVoice: Windows SAPI5\nLatency: %.1fms\nReason: %s", latency_ms, exc)
             return await self.fallback_engine.synthesize(clean_text, **kwargs)
 
     async def stream_speech(

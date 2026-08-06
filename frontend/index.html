@@ -1017,14 +1017,32 @@
             return false;
         }
 
+        function cleanTextForSpeech(raw) {
+            if (!raw) return "";
+            let text = raw.replace(/https?:\/\/\S+|www\.\S+/g, '');
+            text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+            text = text.replace(/(?:Source|Retrieved|Confidence|Map Link):\s*\S+/gi, '');
+            text = text.replace(/<[^>]+>/g, '');
+            text = text.replace(/```[\s\S]*?```/g, '');
+            text = text.replace(/`[^`]+`/g, '');
+            text = text.replace(/[*#_~>|\[\]()+=]/g, ' ');
+            text = text.replace(/[/\\–—\-]+/g, ' ');
+            text = text.replace(/\.{2,}/g, '.');
+            text = text.replace(/(\d+)\s*°\s*C\b/gi, '$1 degrees Celsius');
+            text = text.replace(/(\d+)\s*°\s*F\b/gi, '$1 degrees Fahrenheit');
+            text = text.replace(/(\d+)\s*°/g, '$1 degrees');
+            return text.replace(/\s+/g, ' ').trim();
+        }
+
         async function speak(text) {
-            if (!text || text.trim().length === 0) return;
+            const cleanText = cleanTextForSpeech(text);
+            if (!cleanText || cleanText.length === 0) return;
             stopActiveAudioPlayback();
 
-            const playedServer = await playServerTTS(text);
+            const playedServer = await playServerTTS(cleanText);
             if (!playedServer) {
                 console.log('[TTS] Browser');
-                FalsoVoice.speak(text);
+                FalsoVoice.speak(cleanText);
             }
         }
 
