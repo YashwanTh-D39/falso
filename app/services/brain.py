@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 # guarantees every tool is available to chat routing.
 import app.tools.file_tool
 import app.tools.system_tool
-import app.tools.time_tool  # noqa: F401 — registers TimeTool
+import app.tools.time_tool
+import app.tools.web_search_tool  # noqa: F401
 from app.personality import (
     ConversationState,
     PersonalityEngine,

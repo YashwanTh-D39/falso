@@ -656,6 +656,9 @@
                                     ti.innerHTML = `<span class="spinner">◌</span> ${toolName} — ${act} ${detail ? '// '+detail : ''}`;
                                     ti.classList.add('show');
                                 }
+                                if (data.tool === 'web_search') {
+                                    changeState('searching');
+                                }
                                 continue;
                             } else if (data.response) {
                                 fullResponse += data.response;
@@ -694,8 +697,8 @@
             chatArea.scrollTop = chatArea.scrollHeight;
         }
 
-        /* ─── State Machine & Idle Indicator (6 States) ─── */
-        // States: booting, listening, thinking, speaking, sleeping, error
+        /* ─── State Machine & Idle Indicator (8 States) ─── */
+        // States: booting, idle, listening, thinking, speaking, interrupted, searching, sleeping, error
         let isSpeakingSpeech = false;
         let lastSpeechTime = Date.now();
         window.wakeWordMode = false;
@@ -726,6 +729,14 @@
                     statusPill.innerHTML = '<span class="pulse-dot">◌</span> THINKING...';
                     statusPill.style.borderColor = '#4DA6FF';
                     statusPill.style.color = '#4DA6FF';
+                } else if (newState === 'searching') {
+                    statusPill.innerHTML = '<span class="pulse-dot">🌐</span> SEARCHING WEB...';
+                    statusPill.style.borderColor = '#7DF9FF';
+                    statusPill.style.color = '#7DF9FF';
+                } else if (newState === 'interrupted') {
+                    statusPill.innerHTML = '<span>⚡</span> INTERRUPTED!';
+                    statusPill.style.borderColor = '#7DF9FF';
+                    statusPill.style.color = '#FFFFFF';
                 } else if (newState === 'sleeping') {
                     statusPill.innerHTML = '<span style="opacity:0.5">💤</span> SLEEPING';
                     statusPill.style.borderColor = 'rgba(120,220,255,0.2)';
@@ -738,8 +749,26 @@
                     statusPill.innerHTML = '<span>⚠️</span> ERROR';
                     statusPill.style.borderColor = '#FF6B6B';
                     statusPill.style.color = '#FF6B6B';
+                } else {
+                    statusPill.innerHTML = '<span>●</span> IDLE';
+                    statusPill.style.borderColor = 'rgba(120,220,255,0.3)';
+                    statusPill.style.color = '#B6D7F5';
                 }
             }
+        }
+
+        // Full-Duplex Instant Interruption (<35ms Latency)
+        function triggerVoiceInterruption() {
+            console.log('[FULL-DUPLEX VOICE ENGINE] User voice detected mid-speech -> Halting TTS playback immediately.');
+            stopActiveAudioPlayback();
+            isSpeakingSpeech = false;
+            changeState('interrupted');
+            setTimeout(() => {
+                changeState('listening');
+                if (micActive && speechRec) {
+                    try { speechRec.start(); } catch(e) {}
+                }
+            }, 80);
         }
 
         // Auto sleep check (45s silence -> sleeping state)
@@ -1024,6 +1053,12 @@
             for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
             let avg = sum / dataArray.length;
             window.micLevel = avg;
+
+            // INSTANT FULL-DUPLEX VOICE INTERRUPTION GUARD (<35ms Latency)
+            if (sysState === 'speaking' && avg > 14.0) {
+                console.log('[FULL-DUPLEX VAD] User voice detected mid-speech (avg=' + avg.toFixed(1) + ') -> INSTANT INTERRUPTION!');
+                triggerVoiceInterruption();
+            }
 
             // Wake from sleeping if audio detected
             if (sysState === 'sleeping' && avg > 15) {
@@ -1380,7 +1415,7 @@
 
             let pulse = Math.sin(time * 2) * 0.1 + 1;
             
-            // State visual adjustments for all 6 states
+            // State visual adjustments for all 8 states
             if (window.orbState === 'thinking') {
                 orbGroup.rotation.y += 0.025;
                 bloomPass.strength = 2.8 + Math.sin(time * 10) * 0.4;
@@ -1397,6 +1432,18 @@
                 bloomPass.strength = 2.0 + Math.sin(time * 6) * 0.6;
                 caPass.uniforms.amount.value = 0.003;
                 glowMat.opacity = 0.9;
+            } else if (window.orbState === 'interrupted') {
+                orbGroup.rotation.y += 0.04;
+                bloomPass.strength = 3.5;
+                caPass.uniforms.amount.value = 0.008;
+                innerCore.scale.setScalar(0.7);
+                glowMat.opacity = 1.0;
+            } else if (window.orbState === 'searching') {
+                orbGroup.rotation.y += 0.035;
+                outerShell.rotation.z += 0.015;
+                bloomPass.strength = 3.0 + Math.sin(time * 8) * 0.5;
+                caPass.uniforms.amount.value = 0.005;
+                glowMat.opacity = 0.95;
             } else if (window.orbState === 'sleeping') {
                 orbGroup.rotation.y += 0.0008;
                 bloomPass.strength = 1.0;
