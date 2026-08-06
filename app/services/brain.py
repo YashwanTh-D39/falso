@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 # Tool modules self-register with ToolRegistry on import; importing them here
 # guarantees every tool is available to chat routing.
 import app.tools.file_tool
+import app.tools.github_tool
+import app.tools.maps_tool
+import app.tools.pypi_tool
 import app.tools.system_tool
 import app.tools.time_tool
 import app.tools.weather_tool

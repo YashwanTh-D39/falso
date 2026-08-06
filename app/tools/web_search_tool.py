@@ -56,7 +56,7 @@ class WebSearchTool(Tool):
         
         search_triggers = [
             "search", "google", "ddg", "duckduckgo", "news", "latest", "current",
-            "stock", "price", "score", "release", "github", "repo",
+            "stock", "price", "score", "release",
             "docs", "today", "right now", "what happened", "who won", "market",
             "trending", "live stream", "population", "gdp", "president",
             "prime minister", "ceo", "version", "flight", "score", "match"
@@ -127,9 +127,12 @@ class WebSearchTool(Tool):
                     data=f"No web search results found for query: {query!r}",
                 )
 
-            output_lines = [f"Web Search Results for '{query}':\n"]
+            from datetime import datetime
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            output_lines = [f"Web Search Results for '{query}' (Retrieved: {now_str} | Confidence: High):\n"]
             for r in results:
-                output_lines.append(f"• [{r['title']}]({r['url']})\n  {r['snippet']}\n")
+                domain = r['url'].split('/')[2] if '://' in r['url'] else r['url']
+                output_lines.append(f"• [{r['title']}]({r['url']}) | Source: {domain}\n  {r['snippet']}\n")
 
             return ToolResult(
                 success=True,
