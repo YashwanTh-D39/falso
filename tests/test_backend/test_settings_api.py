@@ -21,7 +21,7 @@ def test_update_settings_endpoint():
             json={
                 "ai_provider": "gemini",
                 "gemini_model": "gemini-3.6-flash",
-                "gemini_api_key": "test_key_12345",
+                "gemini_api_key": "AIzaSyTestValidKey12345",
             },
         )
         assert response.status_code == 200
@@ -32,7 +32,7 @@ def test_update_settings_endpoint():
         assert data["gemini_api_key_configured"] is True
 
         assert settings.ai_provider == "gemini"
-        assert settings.gemini_api_key == "test_key_12345"
+        assert settings.gemini_api_key == "AIzaSyTestValidKey12345"
 
 
 def test_discover_models_endpoint():

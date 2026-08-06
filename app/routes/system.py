@@ -1,4 +1,7 @@
 import logging
+import os
+import re
+from pathlib import Path
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -64,12 +67,63 @@ async def get_settings():
     }
 
 
+INVALID_PLACEHOLDER_KEYS = {
+    "test_key",
+    "test_key_12345",
+    "dummy",
+    "example",
+    "changeme",
+    "your_api_key",
+    "your_gemini_api_key",
+    "placeholder",
+}
+
+
+def is_placeholder_key(key: str | None) -> bool:
+    if not key:
+        return False
+    k = key.strip().lower()
+    if k in INVALID_PLACEHOLDER_KEYS:
+        return True
+    return any(k.startswith(prefix) for prefix in ("test_key", "dummy", "example", "changeme", "your_"))
+
+
+def persist_settings_to_env(target_settings, target_path: Path = Path(".env")) -> bool:
+    """Persist active settings to .env file, skipping when under test environment or targeting placeholder keys."""
+    is_testing = os.getenv("FALSO_TESTING") == "1" or "PYTEST_CURRENT_TEST" in os.environ
+    real_env_target = target_path.resolve() == Path(".env").resolve()
+
+    if is_testing and real_env_target:
+        logger.info("[TEST ISOLATION] Skipping real .env persistence during test execution.")
+        return False
+
+    if not target_path.is_file():
+        return False
+
+    try:
+        content = target_path.read_text(encoding="utf-8")
+        key_to_write = target_settings.gemini_api_key if not is_placeholder_key(target_settings.gemini_api_key) else ""
+        updates = {
+            "AI_PROVIDER": target_settings.ai_provider,
+            "GEMINI_API_KEY": key_to_write,
+            "GEMINI_MODEL": target_settings.gemini_model,
+        }
+        for k, v in updates.items():
+            pattern = re.compile(rf"^{k}=.*$", re.MULTILINE)
+            if pattern.search(content):
+                content = pattern.sub(f"{k}={v}", content)
+            else:
+                content += f"\n{k}={v}"
+        target_path.write_text(content, encoding="utf-8")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not persist settings to %s: %s", target_path, exc)
+        return False
+
+
 @router.post("/settings")
 async def update_settings(request: SettingsUpdateRequest):
-    """Update runtime AI provider settings, persist to .env, and re-instantiate provider."""
-    import re
-    from pathlib import Path
-
+    """Update runtime AI provider settings, persist to .env (outside tests), and re-instantiate provider."""
     from app.providers.factory import build_provider
     from app.routes.brain import brain_service
     from config.settings import settings
@@ -77,7 +131,10 @@ async def update_settings(request: SettingsUpdateRequest):
     if request.ai_provider is not None:
         settings.ai_provider = request.ai_provider.strip().lower()
     if request.gemini_api_key is not None:
-        settings.gemini_api_key = request.gemini_api_key.strip()
+        key_candidate = request.gemini_api_key.strip()
+        if is_placeholder_key(key_candidate):
+            logger.warning("Rejected placeholder GEMINI_API_KEY from persistence: %s", key_candidate)
+        settings.gemini_api_key = key_candidate
     if request.gemini_model is not None:
         settings.gemini_model = request.gemini_model.strip()
     if request.openai_api_key is not None:
@@ -89,31 +146,14 @@ async def update_settings(request: SettingsUpdateRequest):
     brain_service.provider = build_provider(settings)
     logger.info("Re-bound BrainService provider to %s (%s)", brain_service.provider.name, brain_service.provider.model)
 
-    # Persist to local .env file if present
-    env_path = Path(".env")
-    if env_path.is_file():
-        try:
-            content = env_path.read_text(encoding="utf-8")
-            updates = {
-                "AI_PROVIDER": settings.ai_provider,
-                "GEMINI_API_KEY": settings.gemini_api_key,
-                "GEMINI_MODEL": settings.gemini_model,
-            }
-            for k, v in updates.items():
-                pattern = re.compile(rf"^{k}=.*$", re.MULTILINE)
-                if pattern.search(content):
-                    content = pattern.sub(f"{k}={v}", content)
-                else:
-                    content += f"\n{k}={v}"
-            env_path.write_text(content, encoding="utf-8")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Could not persist settings to .env: %s", exc)
+    # Persist settings using helper
+    persist_settings_to_env(settings)
 
     return {
         "status": "updated",
         "ai_provider": settings.ai_provider,
         "gemini_model": settings.gemini_model,
-        "gemini_api_key_configured": bool(settings.gemini_api_key),
+        "gemini_api_key_configured": bool(settings.gemini_api_key and not is_placeholder_key(settings.gemini_api_key)),
     }
 
 
