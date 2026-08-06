@@ -70,12 +70,28 @@ class WeatherTool(Tool):
         if any(re.search(r'\b' + re.escape(trig) + r'\b', prompt_lower) for trig in weather_triggers):
             logger.info("[WEATHER] Step 1: User asks weather -> %r", prompt_stripped)
 
-            # Extract location from prompt if specified (e.g. "weather in Tokyo" -> "Tokyo")
-            match = re.search(r'(?:weather|temperature|forecast)\s+(?:in|for|at)\s+([a-zA-Z\s]+)', prompt_stripped, re.IGNORECASE)
-            location = match.group(1).strip() if match else "New York"
+            # 1. Try matching explicit location after prepositions (in/for/at)
+            match = re.search(r'(?:weather|temperature|forecast)?\s*(?:in|for|at)\s+([a-zA-Z\s,]+)', prompt_stripped, re.IGNORECASE)
+            if match:
+                loc = match.group(1).strip()
+                loc = re.sub(r'\b(?:today|now|please|right now|currently)\b', '', loc, flags=re.IGNORECASE).strip()
+                if loc:
+                    logger.info("[WEATHER] Step 2: Tool selected -> WeatherTool (location=%r)", loc)
+                    return {"location": loc}
 
-            logger.info("[WEATHER] Step 2: Tool selected -> WeatherTool (location=%r)", location)
-            return {"location": location}
+            # 2. Try matching city name directly without preposition (e.g. "Visakhapatnam weather")
+            clean_p = re.sub(r'\b(?:weather|temperature|forecast|today|current|now|is|it|raining|sunny|how|hot|cold|whats|what|the|here|my|location)\b', '', prompt_stripped, flags=re.IGNORECASE).strip()
+            clean_p = re.sub(r'[\?\.\!]', '', clean_p).strip()
+
+            if clean_p and len(clean_p) > 2:
+                logger.info("[WEATHER] Step 2: Tool selected -> WeatherTool (location=%r)", clean_p)
+                return {"location": clean_p}
+
+            # 3. Default to stored user preferred city
+            from app.services.user_profile import user_profile_service
+            pref_city = user_profile_service.get_profile().get("preferred_city", "Visakhapatnam")
+            logger.info("[WEATHER] Step 2: Tool selected -> WeatherTool (default location=%r)", pref_city)
+            return {"location": pref_city}
         return None
 
     @classmethod
@@ -85,7 +101,15 @@ class WeatherTool(Tool):
         return str(result.data)
 
     async def execute(self, **kwargs: Any) -> ToolResult:
-        location = kwargs.get("location", "New York").strip() or "New York"
+        raw_location = kwargs.get("location", "").strip()
+        from app.services.user_profile import user_profile_service
+
+        if not raw_location or raw_location.lower() in ("here", "my location", "current location"):
+            location = user_profile_service.get_profile().get("preferred_city", "Visakhapatnam")
+        else:
+            location = raw_location
+            # Save as user preferred city for future queries
+            user_profile_service.update_profile({"preferred_city": location})
 
         try:
             # 1. Geocoding request to find lat/lon
@@ -98,10 +122,12 @@ class WeatherTool(Tool):
                 geo_data = geo_resp.json()
 
                 if not geo_data.get("results"):
-                    logger.warning("[WEATHER] Geocoding location not found for %r — falling back to New York", location)
-                    location = "New York"
-                    geo_resp = await client.get("https://geocoding-api.open-meteo.com/v1/search?name=New+York&count=1")
-                    geo_data = geo_resp.json()
+                    logger.warning("[WEATHER] Geocoding location not found for %r", location)
+                    return ToolResult(
+                        success=False,
+                        data=f"What city should I use for weather?",
+                        error="Location not found"
+                    )
 
                 loc_info = geo_data["results"][0]
                 lat = loc_info["latitude"]

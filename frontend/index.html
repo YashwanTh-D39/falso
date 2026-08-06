@@ -907,8 +907,8 @@
                     const cleanText = text.length > 1000 ? text.substring(0, 1000) + '...' : text;
                     this.utt = new SpeechSynthesisUtterance(cleanText);
                     if (window.falsoVoiceObj) this.utt.voice = window.falsoVoiceObj;
-                    this.utt.rate = 0.95;
-                    this.utt.pitch = 0.9;
+                    this.utt.rate = 0.85;
+                    this.utt.pitch = 0.95;
                     this.utt.volume = 1.0;
 
                     this.utt.onend = () => {

@@ -76,7 +76,7 @@ class ElevenLabsTTSEngine(BaseTTSEngine):
             "text": clean_text,
             "model_id": self.model_id,
             "voice_settings": {
-                "stability": 0.65,
+                "stability": 0.70,
                 "similarity_boost": 0.75,
                 "style": 0.20,
                 "use_speaker_boost": True
