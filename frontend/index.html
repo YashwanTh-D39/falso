@@ -6,9 +6,17 @@
     <title>F.A.L.S.O. // AI CORE ONLINE</title>
     <style>
         :root {
-            --color-amber: #ffaa30;
-            --color-amber-dim: #dd7700;
-            --color-bg-dark: rgba(10, 5, 0, 0.85);
+            --color-primary: #00BFFF;
+            --color-primary-dim: #4DA6FF;
+            --color-accent: #00E5FF;
+            --color-highlight: #7DF9FF;
+            --color-glow: #00E5FF;
+            --color-bg: #020B1F;
+            --color-bg-secondary: #06142E;
+            --color-glass: rgba(20, 40, 80, 0.45);
+            --color-glass-border: rgba(120, 220, 255, 0.20);
+            --color-text: #F2FAFF;
+            --color-text-dim: #B6D7F5;
             --font-mono: "Courier New", Courier, monospace;
         }
 
@@ -17,8 +25,8 @@
             padding: 0;
             width: 100%;
             height: 100%;
-            background-color: #000;
-            color: var(--color-amber);
+            background-color: var(--color-bg);
+            color: var(--color-text);
             font-family: var(--font-mono);
             overflow: hidden;
             user-select: none;
@@ -92,11 +100,11 @@
 
         .hud-panel {
             pointer-events: auto;
-            background: rgba(20, 10, 0, 0.6);
-            border: 1px solid var(--color-amber-dim);
-            box-shadow: 0 0 10px rgba(255, 170, 48, 0.2);
+            background: var(--color-glass);
+            border: 1px solid var(--color-glass-border);
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.15);
             padding: 15px;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(8px);
         }
 
         /* Header */
@@ -111,7 +119,7 @@
             font-size: 32px;
             font-weight: bold;
             letter-spacing: 4px;
-            text-shadow: 0 0 10px var(--color-amber);
+            text-shadow: 0 0 10px var(--color-glow);
             margin: 0;
         }
 
@@ -154,27 +162,28 @@
         }
 
         .message {
-            background: rgba(255, 170, 48, 0.1);
-            border-left: 3px solid var(--color-amber);
+            background: rgba(0, 191, 255, 0.08);
+            border-left: 3px solid var(--color-primary);
             padding: 10px;
             font-size: 14px;
             line-height: 1.4;
-            text-shadow: 0 0 2px var(--color-amber);
+            text-shadow: 0 0 2px rgba(0, 229, 255, 0.3);
+            color: var(--color-text);
         }
 
         .message.user {
             border-left: none;
-            border-right: 3px solid #ffcc66;
-            background: rgba(255, 204, 102, 0.1);
+            border-right: 3px solid var(--color-highlight);
+            background: rgba(125, 249, 255, 0.08);
             align-self: flex-end;
             text-align: right;
-            color: #ffcc66;
+            color: var(--color-highlight);
         }
 
         #tool-indicator {
             display: none;
             font-size: 12px;
-            color: #ffcc66;
+            color: var(--color-accent);
             animation: pulse 1s infinite;
         }
 
@@ -198,24 +207,24 @@
 
         input[type="text"] {
             flex: 1;
-            background: rgba(10, 5, 0, 0.8);
-            border: 1px solid var(--color-amber);
-            color: var(--color-amber);
+            background: rgba(2, 11, 31, 0.85);
+            border: 1px solid var(--color-primary);
+            color: var(--color-text);
             font-family: var(--font-mono);
             font-size: 16px;
             padding: 10px 15px;
             outline: none;
-            box-shadow: inset 0 0 10px rgba(255, 170, 48, 0.2);
+            box-shadow: inset 0 0 10px rgba(0, 191, 255, 0.15);
         }
 
         input[type="text"]:focus {
-            box-shadow: inset 0 0 15px rgba(255, 170, 48, 0.5), 0 0 10px rgba(255, 170, 48, 0.5);
+            box-shadow: inset 0 0 15px rgba(0, 191, 255, 0.35), 0 0 10px rgba(0, 229, 255, 0.4);
         }
 
         button {
-            background: rgba(255, 170, 48, 0.2);
-            border: 1px solid var(--color-amber);
-            color: var(--color-amber);
+            background: rgba(0, 191, 255, 0.15);
+            border: 1px solid var(--color-primary);
+            color: var(--color-primary);
             font-family: var(--font-mono);
             font-size: 14px;
             padding: 10px 20px;
@@ -225,15 +234,15 @@
         }
 
         button:hover {
-            background: var(--color-amber);
-            color: #000;
-            box-shadow: 0 0 15px var(--color-amber);
+            background: var(--color-primary);
+            color: var(--color-bg);
+            box-shadow: 0 0 15px var(--color-glow);
         }
 
         button.active {
-            background: #ffcc66;
-            color: #000;
-            box-shadow: 0 0 20px #ffcc66;
+            background: var(--color-accent);
+            color: var(--color-bg);
+            box-shadow: 0 0 20px var(--color-glow);
         }
 
         /* Side Panels */
@@ -242,14 +251,15 @@
             top: 100px;
             bottom: 100px;
             width: 300px;
-            background: rgba(10, 5, 0, 0.9);
-            border: 1px solid var(--color-amber);
+            background: rgba(6, 20, 46, 0.92);
+            border: 1px solid var(--color-glass-border);
             padding: 20px;
             display: none;
             flex-direction: column;
             gap: 15px;
             overflow-y: auto;
             pointer-events: auto;
+            backdrop-filter: blur(12px);
         }
 
         #settings-panel {
@@ -265,7 +275,7 @@
         .panel-header {
             font-size: 18px;
             font-weight: bold;
-            border-bottom: 1px solid var(--color-amber-dim);
+            border-bottom: 1px solid var(--color-glass-border);
             padding-bottom: 10px;
             margin-bottom: 10px;
         }
@@ -278,13 +288,13 @@
 
         .form-group label {
             font-size: 12px;
-            color: var(--color-amber-dim);
+            color: var(--color-text-dim);
         }
 
         select, input[type="password"] {
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--color-amber-dim);
-            color: var(--color-amber);
+            background: rgba(2, 11, 31, 0.8);
+            border: 1px solid var(--color-glass-border);
+            color: var(--color-text);
             font-family: var(--font-mono);
             padding: 5px;
         }
@@ -295,7 +305,7 @@
             bottom: 20px;
             left: 20px;
             font-size: 10px;
-            color: var(--color-amber-dim);
+            color: var(--color-text-dim);
         }
 
         #hud-controls {
@@ -332,16 +342,16 @@
         .progress-bar-container {
             width: 300px;
             height: 2px;
-            background: rgba(255, 170, 48, 0.2);
+            background: rgba(0, 191, 255, 0.15);
             margin-top: 20px;
         }
 
         .progress-bar {
             height: 100%;
-            background: var(--color-amber);
+            background: var(--color-primary);
             width: 0%;
             transition: width 0.2s;
-            box-shadow: 0 0 10px var(--color-amber);
+            box-shadow: 0 0 10px var(--color-glow);
         }
 
         ::-webkit-scrollbar {
@@ -351,10 +361,10 @@
             background: rgba(0, 0, 0, 0.5);
         }
         ::-webkit-scrollbar-thumb {
-            background: var(--color-amber-dim);
+            background: var(--color-primary-dim);
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: var(--color-amber);
+            background: var(--color-primary);
         }
     </style>
     
@@ -457,7 +467,7 @@
             <!-- Messages will appear here -->
         </div>
 
-        <div id="toolIndicator" style="display:none;font-size:11px;color:#ffcc66;text-align:center;margin-bottom:6px"></div>
+        <div id="toolIndicator" style="display:none;font-size:11px;color:#7DF9FF;text-align:center;margin-bottom:6px"></div>
 
         <div id="command-bar" class="hud-panel">
             <button id="btn-mic">MIC [OFF]</button>
@@ -631,7 +641,7 @@
                                 if (modelName) document.querySelector('.sysid').innerHTML = 'FALSO // ' + escHtml(modelName.toUpperCase().replace(':','')) + '<br>AI CORE ONLINE';
                             } else if (data.error) {
                                 fullResponse += 'Error: ' + data.error;
-                                msgDiv.innerHTML += `<br><span style="color:#ff5533">Error: ${data.error}</span>`;
+                                msgDiv.innerHTML += `<br><span style="color:#FF6B6B">Error: ${data.error}</span>`;
                                 changeState('error');
                             }
                         } catch(e) { console.error("Parse err", e, line); }
@@ -659,33 +669,81 @@
         }
 
         // TTS
+        const TTS_MAX_CHARS = 2000; // Truncate long responses for TTS
         async function playServerTTS(text) {
+            const ttsText = text.length > TTS_MAX_CHARS ? text.substring(0, TTS_MAX_CHARS) + '...' : text;
+            console.log('[TTS] playServerTTS called, text length:', text.length, '→ sending:', ttsText.length, 'chars');
             changeState('speaking');
             try {
                 const res = await fetch(API_BASE + '/voice/tts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text })
+                    body: JSON.stringify({ text: ttsText })
                 });
-                
+
+                console.log('[TTS] Server response:', res.status, res.headers.get('content-type'));
+
                 if (res.ok) {
                     const blob = await res.blob();
+                    console.log('[TTS] Audio blob received:', blob.size, 'bytes, type:', blob.type);
+
+                    if (blob.size < 100) {
+                        console.warn('[TTS] Audio blob too small (<100 bytes), likely empty. Skipping playback.');
+                        changeState('idle');
+                        return;
+                    }
+
                     const url = URL.createObjectURL(blob);
                     const audio = new Audio(url);
-                    audio.onended = () => changeState('idle');
-                    audio.play();
+                    audio.onended = () => {
+                        console.log('[TTS] Audio playback ended.');
+                        URL.revokeObjectURL(url);
+                        changeState('idle');
+                    };
+                    audio.onerror = (e) => {
+                        console.error('[TTS] Audio playback error:', e);
+                        URL.revokeObjectURL(url);
+                        changeState('idle');
+                    };
+                    try {
+                        await audio.play();
+                        console.log('[TTS] Audio playback started successfully.');
+                    } catch (playErr) {
+                        console.warn('[TTS] Autoplay blocked by browser:', playErr.message);
+                        // Autoplay was blocked — browser requires user gesture.
+                        // Store audio for replay on next user click.
+                        window._pendingAudio = audio;
+                        window._pendingAudioUrl = url;
+                        changeState('idle');
+                    }
                 } else {
+                    const errText = await res.text().catch(() => '');
+                    console.error('[TTS] Server error:', res.status, errText);
                     changeState('idle');
                 }
             } catch (e) {
-                console.error("TTS Error", e);
+                console.error('[TTS] Fetch error:', e);
                 changeState('idle');
             }
         }
 
         function speak(text) {
+            if (!text || text.trim().length === 0) return;
             playServerTTS(text);
         }
+
+        // Auto-resume blocked audio on any user click
+        document.addEventListener('click', () => {
+            if (window._pendingAudio) {
+                window._pendingAudio.play().then(() => {
+                    console.log('[TTS] Resumed blocked audio on user click.');
+                    changeState('speaking');
+                    window._pendingAudio = null;
+                    URL.revokeObjectURL(window._pendingAudioUrl);
+                    window._pendingAudioUrl = null;
+                }).catch(() => {});
+            }
+        }, { once: false });
 
         // STT Web Speech
         function initSpeechRecognition() {
@@ -911,11 +969,11 @@
         const container = document.getElementById('orb-root');
         
         // Colors
-        const C_BRIGHT = 0xffaa30;
-        const C_MID = 0xdd7700;
-        const C_DIM = 0x884400;
-        const C_FAINT = 0x553300;
-        const C_HOT = 0xffcc66;
+        const C_BRIGHT = 0x00BFFF;
+        const C_MID = 0x4DA6FF;
+        const C_DIM = 0x1A5C99;
+        const C_FAINT = 0x0D3B66;
+        const C_HOT = 0x7DF9FF;
 
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x000000, 0.02);
@@ -1068,7 +1126,7 @@
         const textGroup = new THREE.Group();
         for(let i=0; i<400; i++) {
             const str = snippets[Math.floor(Math.random() * snippets.length)];
-            const sp = createTextSprite(str, "#ffaa30");
+            const sp = createTextSprite(str, "#00BFFF");
             const r = 1.0 + Math.random() * 2.5;
             sp.position.setFromSphericalCoords(r, Math.random()*Math.PI, Math.random()*Math.PI*2);
             textGroup.add(sp);
