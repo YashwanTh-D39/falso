@@ -56,7 +56,7 @@ class WebSearchTool(Tool):
         
         search_triggers = [
             "search", "google", "ddg", "duckduckgo", "news", "latest", "current",
-            "weather", "stock", "price", "score", "release", "github", "repo",
+            "stock", "price", "score", "release", "github", "repo",
             "docs", "today", "right now", "what happened", "who won", "market",
             "trending", "live stream", "population", "gdp", "president",
             "prime minister", "ceo", "version", "flight", "score", "match"

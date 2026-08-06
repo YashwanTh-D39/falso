@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 import app.tools.file_tool
 import app.tools.system_tool
 import app.tools.time_tool
+import app.tools.weather_tool
 import app.tools.web_search_tool  # noqa: F401
 from app.personality import (
     ConversationState,
@@ -162,18 +163,21 @@ class BrainService:
                 }) + "\n"
                 result = await self.tool_manager.execute(tool_cls.name, **kwargs)
                 response_text = tool_cls.format_result(result)
-                diagnostic = (
-                    result.data.get("message")
-                    or result.data.get("error")
-                    or response_text[:80]
-                ) if result.data else response_text[:80]
+                if isinstance(result.data, dict):
+                    diagnostic = (
+                        result.data.get("message")
+                        or result.data.get("error")
+                        or response_text[:80]
+                    )
+                else:
+                    diagnostic = response_text[:80]
                 logger.debug(
                     "Tool result: success=%s | %s",
                     result.success, diagnostic,
                 )
 
                 # ── Store pending action if confirmation is required ──
-                if result.data and result.data.get("confirmation_required"):
+                if isinstance(result.data, dict) and result.data.get("confirmation_required"):
                     self.context.store_pending(
                         tool=tool_cls.name,
                         intent=kwargs.get("command", "?"),
@@ -189,8 +193,8 @@ class BrainService:
 
                 # Store filename for pronoun resolution
                 file_candidates = [
-                    result.data.get("path") if result.data else None,
-                    result.data.get("from") if result.data else None,
+                    result.data.get("path") if isinstance(result.data, dict) else None,
+                    result.data.get("from") if isinstance(result.data, dict) else None,
                     kwargs.get("path"),
                     kwargs.get("new_name"),
                 ]
