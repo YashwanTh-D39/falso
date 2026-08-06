@@ -366,6 +366,26 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--color-primary);
         }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 229, 255, 0.12);
+            border: 1px solid var(--color-accent);
+            color: var(--color-accent);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            padding: 8px 14px;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            text-shadow: 0 0 8px var(--color-glow);
+        }
+
+        .pulse-dot {
+            color: #7DF9FF;
+            animation: blink 1.2s infinite;
+        }
     </style>
     
     <!-- Three.js Import Map -->
@@ -469,9 +489,15 @@
 
         <div id="toolIndicator" style="display:none;font-size:11px;color:#7DF9FF;text-align:center;margin-bottom:6px"></div>
 
+        <div id="mic-permission-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(2,11,31,0.92);z-index:200;flex-direction:column;justify-content:center;align-items:center;backdrop-filter:blur(15px);text-align:center;padding:20px;">
+            <h2 style="font-size:28px;color:#7DF9FF;letter-spacing:3px;margin-bottom:15px;text-shadow:0 0 15px #00E5FF">MICROPHONE ACCESS REQUIRED</h2>
+            <p style="font-size:14px;color:#B6D7F5;max-width:500px;line-height:1.6;margin-bottom:25px">FALSO requires continuous microphone permission to operate as your hands-free AI companion. Please grant permission in your browser.</p>
+            <button onclick="requestMicPermission()" style="font-size:16px;padding:12px 30px;background:#00E5FF;color:#020B1F;font-weight:bold;box-shadow:0 0 20px #00E5FF">ALLOW & RETRY</button>
+        </div>
+
         <div id="command-bar" class="hud-panel">
-            <button id="btn-mic">MIC [OFF]</button>
-            <input type="text" id="cmd-input" placeholder="Enter command or query..." autocomplete="off">
+            <div id="mic-status-pill" class="status-pill"><span class="pulse-dot">●</span> AUTO MIC ACTIVE</div>
+            <input type="text" id="cmd-input" placeholder="Say 'FALSO...' or type command..." autocomplete="off">
             <button id="btn-send">SEND</button>
         </div>
 
@@ -668,6 +694,61 @@
             chatArea.scrollTop = chatArea.scrollHeight;
         }
 
+        /* ─── State Machine & Idle Indicator (6 States) ─── */
+        // States: booting, listening, thinking, speaking, sleeping, error
+        let isSpeakingSpeech = false;
+        let lastSpeechTime = Date.now();
+        window.wakeWordMode = false;
+        window.wakeWords = ["hey falso", "falso", "ok falso"];
+
+        function changeState(newState) {
+            sysState = newState;
+            window.orbState = newState;
+            const diag = document.getElementById('diag-content');
+            if (diag) {
+                diag.innerHTML = `
+                    SYS.MEM: ${(performance.memory ? (performance.memory.usedJSHeapSize/1048576).toFixed(0) : '1024')} MB<br>
+                    LATENCY: 12 ms<br>
+                    STATE: ${newState.toUpperCase()}
+                `;
+            }
+            const statusPill = document.getElementById('mic-status-pill');
+            if (statusPill) {
+                if (newState === 'listening') {
+                    statusPill.innerHTML = '<span class="pulse-dot">●</span> LISTENING...';
+                    statusPill.style.borderColor = '#00E5FF';
+                    statusPill.style.color = '#7DF9FF';
+                } else if (newState === 'speaking') {
+                    statusPill.innerHTML = '<span class="pulse-dot">🔊</span> TRANSMITTING...';
+                    statusPill.style.borderColor = '#7DF9FF';
+                    statusPill.style.color = '#00BFFF';
+                } else if (newState === 'thinking') {
+                    statusPill.innerHTML = '<span class="pulse-dot">◌</span> THINKING...';
+                    statusPill.style.borderColor = '#4DA6FF';
+                    statusPill.style.color = '#4DA6FF';
+                } else if (newState === 'sleeping') {
+                    statusPill.innerHTML = '<span style="opacity:0.5">💤</span> SLEEPING';
+                    statusPill.style.borderColor = 'rgba(120,220,255,0.2)';
+                    statusPill.style.color = '#B6D7F5';
+                } else if (newState === 'booting') {
+                    statusPill.innerHTML = '<span class="pulse-dot">⚡</span> BOOTING...';
+                    statusPill.style.borderColor = '#00BFFF';
+                    statusPill.style.color = '#00BFFF';
+                } else if (newState === 'error') {
+                    statusPill.innerHTML = '<span>⚠️</span> ERROR';
+                    statusPill.style.borderColor = '#FF6B6B';
+                    statusPill.style.color = '#FF6B6B';
+                }
+            }
+        }
+
+        // Auto sleep check (45s silence -> sleeping state)
+        setInterval(() => {
+            if (sysState === 'listening' && (Date.now() - lastSpeechTime > 45000)) {
+                changeState('sleeping');
+            }
+        }, 5000);
+
         /* ─── FalsoVoice Web Audio & SpeechSynthesis Fallback Engine ─── */
         const FalsoVoice = {
             ctx: null,
@@ -692,6 +773,7 @@
                 if (!text) return;
                 if (!('speechSynthesis' in window)) return;
                 this.stop();
+                isSpeakingSpeech = true;
                 changeState('speaking');
                 this.selectVoice();
                 try {
@@ -704,17 +786,27 @@
                     this.utt.volume = 1.0;
 
                     this.utt.onend = () => {
-                        changeState('idle');
                         this.stop();
+                        isSpeakingSpeech = false;
+                        lastSpeechTime = Date.now();
+                        setTimeout(() => {
+                            changeState('listening');
+                            if (micActive && speechRec) { try { speechRec.start(); } catch(e) {} }
+                        }, 250);
                     };
                     this.utt.onerror = () => {
-                        changeState('idle');
                         this.stop();
+                        isSpeakingSpeech = false;
+                        setTimeout(() => {
+                            changeState('listening');
+                            if (micActive && speechRec) { try { speechRec.start(); } catch(e) {} }
+                        }, 250);
                     };
                     speechSynthesis.speak(this.utt);
                 } catch(e) {
-                    changeState('idle');
                     this.stop();
+                    isSpeakingSpeech = false;
+                    changeState('listening');
                 }
             },
             stop() {
@@ -739,12 +831,14 @@
                 currentAudioSource = null;
             }
             FalsoVoice.stop();
+            isSpeakingSpeech = false;
         }
 
         const TTS_MAX_CHARS = 2000;
         async function playServerTTS(text) {
             const ttsText = text.length > TTS_MAX_CHARS ? text.substring(0, TTS_MAX_CHARS) + '...' : text;
             console.log('[TTS AUDIT Stage 1] Frontend calling POST /api/v1/voice/tts for text length:', ttsText.length);
+            isSpeakingSpeech = true;
             try {
                 const res = await fetch(API_BASE + '/voice/tts', {
                     method: 'POST',
@@ -757,6 +851,7 @@
                     console.log(`[TTS AUDIT Stage 7] Frontend received ${audioBlob.size} audio bytes from backend (type: ${audioBlob.type})`);
                     if (audioBlob.size < 100) {
                         console.warn('[TTS AUDIT Stage 7 Warning] Backend returned empty/tiny audio bytes');
+                        isSpeakingSpeech = false;
                         return false;
                     }
                     const audioUrl = URL.createObjectURL(audioBlob);
@@ -767,14 +862,23 @@
                     audio.onended = () => {
                         console.log('[TTS AUDIT Stage 8] Audio speaker playback finished cleanly');
                         URL.revokeObjectURL(audioUrl);
-                        changeState('idle');
                         currentAudioSource = null;
+                        isSpeakingSpeech = false;
+                        lastSpeechTime = Date.now();
+                        setTimeout(() => {
+                            changeState('listening');
+                            if (micActive && speechRec) { try { speechRec.start(); } catch(e) {} }
+                        }, 250);
                     };
                     audio.onerror = (e) => {
                         console.error('[TTS AUDIT Stage 8 Failure] HTML5 Audio element error ->', e);
                         URL.revokeObjectURL(audioUrl);
-                        changeState('idle');
                         currentAudioSource = null;
+                        isSpeakingSpeech = false;
+                        setTimeout(() => {
+                            changeState('listening');
+                            if (micActive && speechRec) { try { speechRec.start(); } catch(e) {} }
+                        }, 250);
                     };
                     try {
                         await audio.play();
@@ -783,6 +887,7 @@
                     } catch (playErr) {
                         console.warn('[TTS AUDIT Stage 8 Autoplay Warning] Play failed:', playErr.message);
                         currentAudioSource = null;
+                        isSpeakingSpeech = false;
                         return false;
                     }
                 } else {
@@ -791,6 +896,7 @@
             } catch (e) {
                 console.warn('[TTS AUDIT Stage 1 Failure] Fetch /voice/tts network exception ->', e);
             }
+            isSpeakingSpeech = false;
             return false;
         }
 
@@ -806,7 +912,7 @@
             }
         }
 
-        // STT Web Speech
+        // STT Web Speech (Continuous Hands-Free)
         function initSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) return null;
@@ -815,56 +921,100 @@
             rec.continuous = true;
             rec.interimResults = true;
             
-            rec.onstart = () => { console.log("STT Start"); changeState('listening'); };
+            rec.onstart = () => {
+                console.log("STT Continuous Listening Started");
+                if (sysState !== 'speaking' && sysState !== 'thinking') {
+                    changeState('listening');
+                }
+            };
             rec.onresult = (event) => {
+                // Acoustic echo guard: ignore transcript if FALSO is currently speaking or thinking
+                if (sysState === 'speaking' || sysState === 'thinking' || isSpeakingSpeech) {
+                    console.log('[STT ECHO GUARD] Ignoring transcript while FALSO is speaking/thinking');
+                    return;
+                }
+
                 let finalTrans = '';
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
                         finalTrans += event.results[i][0].transcript;
                     }
                 }
-                if (finalTrans) {
-                    disableMic();
-                    sendToFalso(finalTrans);
+                if (finalTrans.trim()) {
+                    lastSpeechTime = Date.now();
+                    const text = finalTrans.trim();
+                    console.log('[STT FINAL RESULT]:', text);
+
+                    // Wake word architecture filter
+                    if (window.wakeWordMode) {
+                        const lower = text.toLowerCase();
+                        const matched = window.wakeWords.find(w => lower.startsWith(w) || lower.includes(w));
+                        if (!matched) {
+                            console.log('[WAKE WORD] Heard speech without wake word -> ignoring:', text);
+                            return;
+                        }
+                        const cleanText = text.replace(new RegExp('^.*?' + matched, 'i'), '').trim();
+                        if (!cleanText) {
+                            speak("Yes Sir, I am listening.");
+                            return;
+                        }
+                        sendToFalso(cleanText);
+                    } else {
+                        sendToFalso(text);
+                    }
                 }
             };
             rec.onerror = (e) => {
+                if (e.error === 'no-speech') {
+                    if (micActive && sysState !== 'speaking' && sysState !== 'thinking') {
+                        try { rec.start(); } catch(_) {}
+                    }
+                    return;
+                }
                 console.error("STT Error", e.error);
-                if (e.error === 'no-speech' && micActive) rec.start();
+                if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+                    document.getElementById('mic-permission-overlay').style.display = 'flex';
+                    changeState('error');
+                }
             };
-            rec.onend = () => { if (micActive) rec.start(); };
+            rec.onend = () => {
+                if (micActive && sysState !== 'speaking' && sysState !== 'thinking') {
+                    try { rec.start(); } catch(_) {}
+                }
+            };
             
             return rec;
         }
 
+        window.requestMicPermission = async () => {
+            document.getElementById('mic-permission-overlay').style.display = 'none';
+            await enableMic();
+        };
+
         async function enableMic() {
             stopActiveAudioPlayback();
             if (!speechRec) speechRec = initSpeechRecognition();
-            if (speechRec) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    analyser = audioContext.createAnalyser();
-                    const source = audioContext.createMediaStreamSource(stream);
-                    source.connect(analyser);
-                    analyser.fftSize = 256;
-                    dataArray = new Uint8Array(analyser.frequencyBinCount);
-                    
-                    micActive = true;
-                    document.getElementById('btn-mic').textContent = 'MIC [ON]';
-                    document.getElementById('btn-mic').classList.add('active');
-                    speechRec.start();
-                    pollMic();
-                } catch(e) { console.error("Mic access denied", e); }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+                analyser.fftSize = 256;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                micActive = true;
+                document.getElementById('mic-permission-overlay').style.display = 'none';
+                changeState('listening');
+                if (speechRec) {
+                    try { speechRec.start(); } catch(_) {}
+                }
+                pollMic();
+            } catch(e) {
+                console.error("Mic permission error:", e);
+                document.getElementById('mic-permission-overlay').style.display = 'flex';
+                changeState('error');
             }
-        }
-
-        function disableMic() {
-            micActive = false;
-            if (speechRec) speechRec.stop();
-            document.getElementById('btn-mic').textContent = 'MIC [OFF]';
-            document.getElementById('btn-mic').classList.remove('active');
-            changeState('idle');
         }
 
         function pollMic() {
@@ -873,14 +1023,16 @@
             let sum = 0;
             for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
             let avg = sum / dataArray.length;
-            // Can use avg to drive orb pulse, handled in render loop via window.micLevel
             window.micLevel = avg;
+
+            // Wake from sleeping if audio detected
+            if (sysState === 'sleeping' && avg > 15) {
+                lastSpeechTime = Date.now();
+                changeState('listening');
+            }
+
             requestAnimationFrame(pollMic);
         }
-
-        document.getElementById('btn-mic').onclick = () => {
-            if (micActive) disableMic(); else enableMic();
-        };
 
         // UI & Commands
         document.getElementById('btn-send').onclick = () => {
@@ -1231,22 +1383,41 @@
 
             let pulse = Math.sin(time * 2) * 0.1 + 1;
             
-            // State adjustments
-            if(window.orbState === 'thinking') {
-                orbGroup.rotation.y += 0.02;
-                bloomPass.strength = 2.5 + Math.sin(time*10)*0.5;
-                caPass.uniforms.amount.value = 0.005;
-                glowMat.opacity = 0.8;
+            // State visual adjustments for all 6 states
+            if (window.orbState === 'thinking') {
+                orbGroup.rotation.y += 0.025;
+                bloomPass.strength = 2.8 + Math.sin(time * 10) * 0.4;
+                caPass.uniforms.amount.value = 0.006;
+                glowMat.opacity = 0.85;
             } else if (window.orbState === 'listening') {
-                orbGroup.rotation.y += 0.005;
-                let m = (window.micLevel / 128.0) * 0.5;
+                orbGroup.rotation.y += 0.006;
+                let m = (window.micLevel / 128.0) * 0.6;
                 bloomPass.strength = 1.8 + m;
                 innerCore.scale.setScalar(1 + m);
+                glowMat.opacity = 0.6 + m * 0.4;
             } else if (window.orbState === 'speaking') {
-                orbGroup.rotation.y += 0.01;
-                bloomPass.strength = 1.8 + Math.sin(time*5)*0.5;
-            } else {
-                orbGroup.rotation.y += 0.002;
+                orbGroup.rotation.y += 0.012;
+                bloomPass.strength = 2.0 + Math.sin(time * 6) * 0.6;
+                caPass.uniforms.amount.value = 0.003;
+                glowMat.opacity = 0.9;
+            } else if (window.orbState === 'sleeping') {
+                orbGroup.rotation.y += 0.0008;
+                bloomPass.strength = 1.0;
+                caPass.uniforms.amount.value = 0.001;
+                innerCore.scale.setScalar(0.95);
+                glowMat.opacity = 0.2;
+            } else if (window.orbState === 'booting') {
+                orbGroup.rotation.y += 0.015;
+                bloomPass.strength = 1.5 + Math.sin(time * 3) * 0.3;
+                caPass.uniforms.amount.value = 0.002;
+                glowMat.opacity = 0.5;
+            } else if (window.orbState === 'error') {
+                orbGroup.rotation.y += 0.03;
+                bloomPass.strength = 2.2 + Math.sin(time * 15) * 0.8;
+                caPass.uniforms.amount.value = 0.010;
+                glowMat.opacity = 0.9;
+            } else { // idle
+                orbGroup.rotation.y += 0.003;
                 bloomPass.strength = 1.8;
                 caPass.uniforms.amount.value = 0.002;
                 innerCore.scale.setScalar(1);
@@ -1271,24 +1442,33 @@
             composer.render();
         }
 
-        // Startup Sequence
+        // Automatic Hands-Free Startup Sequence
         async function runStartup() {
+            changeState('booting');
             const log = document.getElementById('startup-log');
             const bar = document.getElementById('startup-progress');
             const steps = ["CORE INIT", "MEMORY LOAD", "NEURAL SYNC", "VOICE LINK", "SYSTEM READY"];
             
-            for(let i=0; i<steps.length; i++) {
+            for (let i = 0; i < steps.length; i++) {
                 log.textContent = steps[i] + "...";
-                bar.style.width = ((i+1) * 20) + "%";
-                await new Promise(r => setTimeout(r, 600));
+                bar.style.width = ((i + 1) * 20) + "%";
+                await new Promise(r => setTimeout(r, 350));
             }
             
             const overlay = document.getElementById('startup-overlay');
             overlay.style.opacity = '0';
-            setTimeout(() => { overlay.style.display = 'none'; }, 1000);
+            setTimeout(() => { overlay.style.display = 'none'; }, 600);
             
             animate();
             fetchConvList();
+
+            // 1. Automatically request mic permission and start speech recognition
+            await enableMic();
+
+            // 2. Automatically greet user verbally
+            const greeting = "Hello Sir. FALSO online. Systems initialized. How can I help you today?";
+            appendMessage('system', greeting);
+            await speak(greeting);
         }
 
         runStartup();
