@@ -74,4 +74,21 @@ class PersonalityEngine:
         if notes:
             prompt = f"{prompt}\n\n" + "\n".join(notes)
 
+        # Inject Companion Profile, Context, and Tasks
+        try:
+            from app.services.user_profile import user_profile_service
+            from app.services.context_detector import context_detector
+            from app.services.task_manager import task_manager_service
+
+            companion_context_block = (
+                "\n\n=== PERSONAL AI COMPANION ACTIVE CONTEXT ===\n"
+                f"[USER PROFILE]\n{user_profile_service.format_summary_for_prompt()}\n\n"
+                f"[DESKTOP CONTEXT]\n{context_detector.format_summary_for_prompt()}\n\n"
+                f"[TASKS & GOALS]\n{task_manager_service.format_summary_for_prompt()}\n"
+                "============================================"
+            )
+            prompt += companion_context_block
+        except Exception as exc:
+            pass
+
         return prompt

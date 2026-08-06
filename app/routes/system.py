@@ -80,6 +80,25 @@ async def get_settings():
     }
 
 
+@router.get("/boot-status")
+async def get_boot_status():
+    """Returns exact status and duration metrics for all 10 startup stages."""
+    from app.services.boot_tracker import boot_tracker
+    return boot_tracker.get_boot_status()
+
+
+@router.post("/handshake")
+async def complete_handshake():
+    """Completes stages 9 and 10 when frontend handshake connects."""
+    import time
+    from app.services.boot_tracker import boot_tracker
+    if not boot_tracker.is_complete:
+        delta_handshake = time.time() - boot_tracker.last_stage_time
+        boot_tracker.log_stage(9, delta_handshake, "Frontend Handshake Received")
+        boot_tracker.log_stage(10, 0.01, "BOOT COMPLETE")
+    return boot_tracker.get_boot_status()
+
+
 INVALID_PLACEHOLDER_KEYS = {
     "test_key",
     "test_key_12345",

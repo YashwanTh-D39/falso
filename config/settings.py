@@ -92,4 +92,11 @@ class Settings(BaseSettings):
     max_list_items: int = 5_000
 
 
+    # Feature Flags
+    enable_spatial_os: bool = True
+    enable_gestures: bool = False
+    enable_filesystem_indexer: bool = True
+    enable_watchdog: bool = True
+
+
 settings = Settings()

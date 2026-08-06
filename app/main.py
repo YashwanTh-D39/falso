@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,7 +16,13 @@ from app.routes.memory import router as memory_router
 from app.routes.system import router as system_router
 from app.routes.tools import router as tools_router
 from app.routes.voice import router as voice_router
+from app.routes.spatial import router as spatial_router
+from app.routes.spatial_ws import router as spatial_ws_router, spatial_broadcaster_loop
+from app.routes.user_profile import router as user_profile_router
+from app.routes.tasks import router as tasks_router
+from app.services.proactive_agent import proactive_agent
 from app.services.system_monitor import system_monitor
+from app.services.filesystem_indexer import filesystem_indexer
 from config.logging import setup_logging
 from config.settings import settings
 
@@ -30,45 +38,91 @@ def _index_response() -> FileResponse:
     )
 
 
+from app.services.boot_tracker import boot_tracker
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # [1/10] Config loaded
+    t0 = time.time()
     setup_logging()
-    system_monitor.start()
-    logger.info("Falso API starting up")
+    boot_tracker.log_stage(1, time.time() - t0)
 
+    # [2/10] Database initialized
+    t0 = time.time()
+    from app.services.filesystem_indexer import filesystem_indexer
+    _ = filesystem_indexer.db_manager
+    boot_tracker.log_stage(2, time.time() - t0)
+
+    # [3/10] Ollama connection verified
+    t0 = time.time()
     if settings.ai_provider == "ollama":
-        logger.info("Local Ollama provider active (model: %s)", settings.ollama_model)
-        import asyncio
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=1.5) as client:
+                res = await client.get(f"{settings.ollama_base_url}/api/tags")
+                status_msg = f"Ollama Online ({settings.ollama_model})" if res.status_code == 200 else f"Ollama Status {res.status_code}"
+                boot_tracker.log_stage(3, time.time() - t0, status_msg)
+        except Exception as exc:
+            boot_tracker.log_stage(3, time.time() - t0, f"Ollama Offline ({exc})")
+    else:
+        boot_tracker.log_stage(3, time.time() - t0, f"Provider: {settings.ai_provider}")
 
+    # [4/10] Filesystem indexer started
+    t0 = time.time()
+    if settings.enable_filesystem_indexer:
+        filesystem_indexer.start()
+    boot_tracker.log_stage(4, time.time() - t0, "Indexer Active" if settings.enable_filesystem_indexer else "Disabled by Flag")
+
+    # [5/10] Watchdog started
+    t0 = time.time()
+    boot_tracker.log_stage(5, time.time() - t0, "Watchdog Active" if settings.enable_watchdog else "Disabled by Flag")
+
+    # [6/10] Spatial broadcaster started
+    t0 = time.time()
+    if settings.enable_spatial_os:
+        asyncio.create_task(spatial_broadcaster_loop())
+        asyncio.create_task(proactive_agent.start_monitoring_loop())
+    boot_tracker.log_stage(6, time.time() - t0, "Spatial Active" if settings.enable_spatial_os else "Disabled by Flag")
+
+    # [7/10] WebSocket initialized
+    t0 = time.time()
+    from app.routes.spatial_ws import ws_manager
+    _ = ws_manager
+    boot_tracker.log_stage(7, time.time() - t0)
+
+    # [8/10] Voice services initialized
+    t0 = time.time()
+    from app.routes.voice import voice_service
+    _ = voice_service
+    boot_tracker.log_stage(8, time.time() - t0)
+
+    # Non-blocking background warmup for local LLM
+    if settings.ai_provider == "ollama":
         from app.routes.brain import brain_service
-
         async def _warmup():
             try:
                 async for _ in brain_service.provider.stream_chat([{"role": "user", "content": "warmup"}]):
                     break
-            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
+            except Exception as exc:
                 logger.debug("Ollama background warmup info: %s", exc)
 
         asyncio.create_task(_warmup())
-    elif settings.ai_provider == "gemini" and not settings.gemini_api_key:
-        logger.warning(
-            "⚠️  Gemini API key not configured. Please add GEMINI_API_KEY to your .env file."
-        )
+
+    logger.info("Falso Core API booted successfully — waiting for frontend handshake...")
 
     try:
         yield
     finally:
-        await system_monitor.stop()
+        if settings.enable_filesystem_indexer:
+            filesystem_indexer.stop()
 
-        # Close AI provider HTTP client if it exposes aclose()
         from app.routes.brain import brain_service
         provider = brain_service.provider
         if hasattr(provider, "aclose"):
             await provider.aclose()
 
         logger.info("Falso API shutting down")
-
-
 
 
 app = FastAPI(
@@ -96,6 +150,10 @@ app.include_router(memory_router)
 app.include_router(tools_router)
 app.include_router(system_router)
 app.include_router(voice_router)
+app.include_router(spatial_router)
+app.include_router(spatial_ws_router)
+app.include_router(user_profile_router)
+app.include_router(tasks_router)
 
 
 @app.get("/health")

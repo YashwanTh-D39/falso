@@ -1,0 +1,18 @@
+[
+  {
+    "id": "task_1",
+    "title": "Build FALSO Personal AI Companion",
+    "category": "coding_goal",
+    "status": "in_progress",
+    "due_date": "2026-08-07",
+    "created_at": 1786047241.7847552
+  },
+  {
+    "id": "task_2",
+    "title": "Verify Silero VAD TTS interruption unit tests",
+    "category": "today",
+    "status": "completed",
+    "due_date": "2026-08-07",
+    "created_at": 1786047241.7847562
+  }
+]

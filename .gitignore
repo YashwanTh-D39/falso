@@ -7,6 +7,9 @@ build/
 
 # Runtime data
 chats/
+*.db
+*.db-shm
+*.db-wal
 
 # Environment
 .env

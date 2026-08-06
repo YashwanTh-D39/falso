@@ -272,6 +272,24 @@
             border-left: none;
         }
 
+        #object-details-panel {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            width: 320px;
+            background: rgba(6, 20, 46, 0.94);
+            border: 1px solid #00E5FF;
+            border-radius: 8px;
+            padding: 20px;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 0 25px rgba(0, 229, 255, 0.3);
+            backdrop-filter: blur(16px);
+            z-index: 100;
+            pointer-events: auto;
+        }
+
         .panel-header {
             font-size: 18px;
             font-weight: bold;
@@ -507,6 +525,24 @@
             <button onclick="testConnection()">TEST CONN</button>
             <button onclick="testVoice()">TEST VOICE</button>
         </div>
+
+        <div id="object-details-panel">
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(0,229,255,0.3);padding-bottom:8px;">
+                <span id="detail-obj-title" style="font-size:16px;font-weight:bold;color:#7DF9FF;">OBJECT DETAILS</span>
+                <button onclick="closeDetailsPanel()" style="background:none;border:none;color:#FF5252;font-size:16px;cursor:pointer;">✕</button>
+            </div>
+            <div style="font-size:12px;color:#B6D7F5;display:flex;flex-direction:column;gap:8px;margin-top:6px;">
+                <div><strong>Type:</strong> <span id="detail-obj-type">-</span></div>
+                <div><strong>Status:</strong> <span id="detail-obj-status">-</span></div>
+                <div id="detail-obj-path-container" style="word-break:break-all;"><strong>Location:</strong> <span id="detail-obj-path">-</span></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:14px;">
+                <button id="detail-btn-action" onclick="executeDetailAction()" style="flex:1;background:#00E5FF;color:#020B1F;font-weight:bold;padding:8px;">ACTION</button>
+                <button onclick="closeDetailsPanel()" style="flex:1;background:rgba(255,255,255,0.1);color:#FFF;padding:8px;">CLOSE</button>
+            </div>
+        </div>
+
+        <div id="proactive-toast-container" style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:250;display:flex;flex-direction:column;gap:8px;pointer-events:none;"></div>
 
         <div id="chat-area">
             <!-- Messages will appear here -->
@@ -923,7 +959,6 @@
         const TTS_MAX_CHARS = 2000;
         async function playServerTTS(text) {
             const ttsText = text.length > TTS_MAX_CHARS ? text.substring(0, TTS_MAX_CHARS) + '...' : text;
-            console.log('[TTS AUDIT Stage 1] Frontend calling POST /api/v1/voice/tts for text length:', ttsText.length);
             isSpeakingSpeech = true;
             try {
                 const res = await fetch(API_BASE + '/voice/tts', {
@@ -933,20 +968,21 @@
                 });
 
                 if (res.ok) {
+                    const providerHeader = res.headers.get('X-TTS-Provider');
+                    const contentType = res.headers.get('Content-Type');
+                    const provider = providerHeader || (contentType && contentType.includes('mpeg') ? 'ElevenLabs' : 'Local TTS');
+                    console.log(`[TTS] ${provider}`);
+
                     const audioBlob = await res.blob();
-                    console.log(`[TTS AUDIT Stage 7] Frontend received ${audioBlob.size} audio bytes from backend (type: ${audioBlob.type})`);
                     if (audioBlob.size < 100) {
-                        console.warn('[TTS AUDIT Stage 7 Warning] Backend returned empty/tiny audio bytes');
                         isSpeakingSpeech = false;
                         return false;
                     }
                     const audioUrl = URL.createObjectURL(audioBlob);
                     const audio = new Audio(audioUrl);
                     currentAudioSource = audio;
-                    console.log('[TTS AUDIT Stage 8] Starting HTML5 Audio speaker playback...');
                     changeState('speaking');
                     audio.onended = () => {
-                        console.log('[TTS AUDIT Stage 8] Audio speaker playback finished cleanly');
                         URL.revokeObjectURL(audioUrl);
                         currentAudioSource = null;
                         isSpeakingSpeech = false;
@@ -957,7 +993,6 @@
                         }, 250);
                     };
                     audio.onerror = (e) => {
-                        console.error('[TTS AUDIT Stage 8 Failure] HTML5 Audio element error ->', e);
                         URL.revokeObjectURL(audioUrl);
                         currentAudioSource = null;
                         isSpeakingSpeech = false;
@@ -968,19 +1003,16 @@
                     };
                     try {
                         await audio.play();
-                        console.log('[TTS AUDIT Stage 8 Success] Audio playing on speakers');
                         return true;
                     } catch (playErr) {
-                        console.warn('[TTS AUDIT Stage 8 Autoplay Warning] Play failed:', playErr.message);
+                        console.warn('[TTS] HTML5 Audio play warning:', playErr.message);
                         currentAudioSource = null;
                         isSpeakingSpeech = false;
                         return false;
                     }
-                } else {
-                    console.error(`[TTS AUDIT Stage 1 Failure] Backend /voice/tts returned HTTP status ${res.status}`);
                 }
             } catch (e) {
-                console.warn('[TTS AUDIT Stage 1 Failure] Fetch /voice/tts network exception ->', e);
+                console.warn('[TTS] Server TTS fetch exception:', e);
             }
             isSpeakingSpeech = false;
             return false;
@@ -988,12 +1020,11 @@
 
         async function speak(text) {
             if (!text || text.trim().length === 0) return;
-            console.log('[VOICE PIPELINE] Stage 6: Gemini response received -> preparing speech output');
             stopActiveAudioPlayback();
 
             const playedServer = await playServerTTS(text);
             if (!playedServer) {
-                console.log('[VOICE PIPELINE] Stage 8: Falling back to browser SpeechSynthesis FalsoVoice');
+                console.log('[TTS] Browser');
                 FalsoVoice.speak(text);
             }
         }
@@ -1021,13 +1052,128 @@
                 smartVadConfig.noiseFloorMultiplier = 1.5;
             }
         }
+        let micStream = null;
+        let isRecStarting = false;
+
+        async function enableMic() {
+            if (micActive) return;
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(micStream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 1024;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                source.connect(analyser);
+
+                micActive = true;
+                console.log('[Microphone Started]');
+
+                initSpeechRecognition();
+                pollMic();
+            } catch (e) {
+                console.error('[Recognition Error] Microphone access failed:', e);
+                const micOverlay = document.getElementById('mic-permission-overlay');
+                if (micOverlay) micOverlay.style.display = 'flex';
+            }
+        }
+
+        window.requestMicPermission = async function() {
+            const micOverlay = document.getElementById('mic-permission-overlay');
+            if (micOverlay) micOverlay.style.display = 'none';
+            await enableMic();
+        };
+
+        function initSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                console.warn('[Recognition Error] Web Speech API not supported in this browser');
+                return;
+            }
+
+            if (speechRec) return;
+
+            speechRec = new SpeechRecognition();
+            speechRec.continuous = true;
+            speechRec.interimResults = true;
+            speechRec.lang = 'en-US';
+
+            speechRec.onstart = () => {
+                isRecStarting = false;
+                console.log('[Microphone Started] WebSpeech session active');
+            };
+
+            speechRec.onspeechstart = () => {
+                console.log('[Speech Started]');
+                if (sysState === 'idle' || sysState === 'sleeping') {
+                    changeState('listening');
+                }
+            };
+
+            speechRec.onspeechend = () => {
+                console.log('[Speech Ended]');
+            };
+
+            speechRec.onresult = (event) => {
+                let finalTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                const clean = finalTranscript.trim();
+                if (clean) {
+                    console.log('[Recognition Result]', clean);
+                    lastSpeechTime = Date.now();
+                    if (sysState !== 'speaking' && sysState !== 'thinking') {
+                        sendToFalso(clean);
+                    }
+                }
+            };
+
+            speechRec.onerror = (event) => {
+                isRecStarting = false;
+                if (event.error !== 'no-speech') {
+                    console.warn('[Recognition Error]', event.error);
+                }
+            };
+
+            speechRec.onend = () => {
+                isRecStarting = false;
+                if (micActive && sysState !== 'speaking' && sysState !== 'booting') {
+                    setTimeout(() => {
+                        startSpeechRecognition();
+                    }, 300);
+                }
+            };
+
+            startSpeechRecognition();
+        }
+
+        function startSpeechRecognition() {
+            if (!speechRec || !micActive || isRecStarting) return;
+            try {
+                isRecStarting = true;
+                speechRec.start();
+            } catch (e) {
+                isRecStarting = false;
+            }
+        }
 
         let ambientNoiseFloor = 8.0;
         let lastSileroCheckTime = 0;
         let isSileroProcessing = false;
 
         async function processAudioWithSileroVad() {
-            if (isSileroProcessing || !analyser) return;
+            if (isSileroProcessing || !analyser || (sysState !== 'speaking' && !isSpeakingSpeech)) return;
             isSileroProcessing = true;
             try {
                 // Extract 512 PCM samples from analyzer for Silero VAD (16kHz 16-bit mono)
@@ -1413,60 +1559,129 @@
         const glowCore = new THREE.Mesh(glowGeo, glowMat);
         orbGroup.add(glowCore);
 
-        // Orbiting Debris
-        const debrisGroup = new THREE.Group();
-        const dMat = new THREE.MeshBasicMaterial({ color: C_BRIGHT, wireframe: true });
-        for(let i=0; i<250; i++) {
-            const mesh = new THREE.Mesh(new THREE.TetrahedronGeometry(0.02), dMat);
-            const r = 2.5 + Math.random() * 2;
-            const th = Math.random() * Math.PI * 2;
-            const ph = Math.random() * Math.PI;
-            mesh.position.setFromSphericalCoords(r, ph, th);
-            mesh.userData = { speed: Math.random() * 0.02, axis: new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize() };
-            debrisGroup.add(mesh);
-        }
-        orbGroup.add(debrisGroup);
+        // Feature Flags for Spatial OS
+        const ENABLE_SPATIAL_OS = true;
+        const ENABLE_GESTURES = false;
 
-        // Text Sprites
-        function createTextSprite(text, col) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 128; canvas.height = 32;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = col;
-            ctx.font = '24px Courier New';
-            ctx.fillText(text, 0, 24);
-            const tex = new THREE.CanvasTexture(canvas);
-            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.7, color: C_BRIGHT });
-            const sprite = new THREE.Sprite(mat);
-            sprite.scale.set(0.5, 0.125, 1);
-            return sprite;
+        if (ENABLE_SPATIAL_OS) {
+            import('./modules/spatial_objects.js').then(module => {
+                window.spatialObjectManager = new module.SpatialObjectManager(scene, THREE);
+                import('./modules/spatial_ws.js').then(wsModule => {
+                    window.spatialWSClient = new wsModule.SpatialWSClient((state) => {
+                        if (window.spatialObjectManager) {
+                            window.spatialObjectManager.syncWithState(state);
+                        }
+                    });
+                    window.spatialWSClient.connect();
+                });
+            });
+
+            import('./modules/radial_menu.js').then(radialModule => {
+                window.radialMenu = new radialModule.RadialMenu(scene, THREE);
+            });
         }
 
-        const snippets = ["sys.init()", "0xFF3A", "malloc()", "SYS_REQ", "DATA_STREAM"];
-        const textGroup = new THREE.Group();
-        for(let i=0; i<400; i++) {
-            const str = snippets[Math.floor(Math.random() * snippets.length)];
-            const sp = createTextSprite(str, "#00BFFF");
-            const r = 1.0 + Math.random() * 2.5;
-            sp.position.setFromSphericalCoords(r, Math.random()*Math.PI, Math.random()*Math.PI*2);
-            textGroup.add(sp);
-        }
-        orbGroup.add(textGroup);
+        if (ENABLE_GESTURES) {
+            import('./modules/hand_tracking.js').then(handModule => {
+                window.handTracker = new handModule.HandTracker();
+                window.handTracker.initialize();
+            });
 
-        // Dust Particles
-        const dustGeo = new THREE.BufferGeometry();
-        const dPos = [];
-        for(let i=0; i<2000; i++) {
-            const r = Math.random() * 8;
-            const th = Math.random() * Math.PI * 2;
-            const ph = Math.random() * Math.PI;
-            const p = new THREE.Vector3().setFromSphericalCoords(r, ph, th);
-            dPos.push(p.x, p.y, p.z);
+            import('./modules/gesture_engine.js').then(gestureModule => {
+                window.gestureEngine = new gestureModule.GestureEngine(scene, camera, THREE);
+            });
         }
-        dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dPos, 3));
-        const pMat = new THREE.PointsMaterial({ color: C_DIM, size: 0.02, transparent: true, opacity: 0.6 });
-        const dust = new THREE.Points(dustGeo, pMat);
-        scene.add(dust);
+
+        // 3D Object Click Handler -> Opens Object Details Panel
+        window.addEventListener('click', (event) => {
+            if (event.target.closest('#hud-container') || event.target.closest('#object-details-panel') || event.target.closest('#command-bar') || event.target.closest('#settings-panel')) {
+                return;
+            }
+            if (!window.spatialObjectManager || !camera) return;
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2(
+                (event.clientX / window.innerWidth) * 2 - 1,
+                -(event.clientY / window.innerHeight) * 2 + 1
+            );
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(window.spatialObjectManager.containerGroup.children, true);
+            if (intersects.length > 0) {
+                let topObj = intersects[0].object;
+                while (topObj.parent && topObj.parent !== window.spatialObjectManager.containerGroup) {
+                    topObj = topObj.parent;
+                }
+                for (const [id, entity] of window.spatialObjectManager.entities.entries()) {
+                    if (entity.group === topObj) {
+                        console.log("[SpatialOS] Clicked entity:", entity.data);
+                        window.showObjectDetails(entity.data);
+                        break;
+                    }
+                }
+            }
+        });
+
+        window.selectedObjectData = null;
+        window.showObjectDetails = function(data) {
+            if (!data) return;
+            window.selectedObjectData = data;
+            document.getElementById('detail-obj-title').textContent = data.name || data.label || 'Entity Details';
+            document.getElementById('detail-obj-type').textContent = (data.type || 'Object').toUpperCase();
+            document.getElementById('detail-obj-status').textContent = data.status || 'Active';
+            const pathElem = document.getElementById('detail-obj-path');
+            const pathContainer = document.getElementById('detail-obj-path-container');
+            if (data.path) {
+                pathElem.textContent = data.path;
+                pathContainer.style.display = 'block';
+            } else {
+                pathContainer.style.display = 'none';
+            }
+            const actBtn = document.getElementById('detail-btn-action');
+            if (data.type === 'file' || data.type === 'folder') {
+                actBtn.textContent = 'OPEN FOLDER/FILE';
+            } else if (data.type === 'app' || data.type === 'process') {
+                actBtn.textContent = 'FOCUS APP';
+            } else {
+                actBtn.textContent = 'INSPECT';
+            }
+            document.getElementById('object-details-panel').style.display = 'flex';
+        };
+
+        window.closeDetailsPanel = function() {
+            document.getElementById('object-details-panel').style.display = 'none';
+        };
+
+        window.executeDetailAction = async function() {
+            const data = window.selectedObjectData;
+            if (!data) return;
+            if (data.path) {
+                await fetch('/api/v1/spatial/files/open', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_path: data.path })
+                });
+            } else if (data.pid) {
+                alert(`Focusing Application: ${data.name} (PID ${data.pid})`);
+            }
+        };
+
+        window.showProactiveToast = function(alertData) {
+            if (!alertData || !alertData.message) return;
+            const container = document.getElementById('proactive-toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.style.cssText = 'background:rgba(6,20,46,0.95);border:1px solid #00E5FF;color:#7DF9FF;font-size:13px;padding:10px 18px;border-radius:20px;box-shadow:0 0 20px rgba(0,229,255,0.4);backdrop-filter:blur(12px);transition:all 0.4s ease;opacity:0;transform:translateY(-10px);pointer-events:auto;';
+            toast.innerHTML = `🤖 <strong>FALSO Proactive:</strong> ${alertData.message}`;
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateY(0)';
+            });
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-10px)';
+                setTimeout(() => toast.remove(), 400);
+            }, 5500);
+        };
 
         // Animation logic
         window.addEventListener('resize', () => {
@@ -1567,15 +1782,15 @@
             
             innerCore.rotation.x -= 0.005;
             innerMost.rotation.y += 0.02;
-            
-            debrisGroup.children.forEach(d => {
-                d.position.applyAxisAngle(d.userData.axis, d.userData.speed);
-                d.rotation.x += d.userData.speed;
-                d.rotation.y += d.userData.speed;
-            });
 
-            dust.rotation.y -= 0.001;
-            textGroup.rotation.y += 0.0015;
+            // FALSO Spatial OS 3D Object & Gesture Updates
+            if (window.spatialObjectManager) {
+                window.spatialObjectManager.update(dt, time);
+            }
+            if (window.handTracker && window.gestureEngine && window.spatialObjectManager) {
+                const handResults = window.handTracker.detectForVideo();
+                window.gestureEngine.processLandmarks(handResults, window.spatialObjectManager);
+            }
 
             composer.render();
         }
@@ -1590,23 +1805,35 @@
             for (let i = 0; i < steps.length; i++) {
                 log.textContent = steps[i] + "...";
                 bar.style.width = ((i + 1) * 20) + "%";
-                await new Promise(r => setTimeout(r, 350));
+                await new Promise(r => setTimeout(r, 100));
+            }
+
+            // [9/10] Frontend Handshake & [10/10] Boot Complete
+            try {
+                await fetch(API_BASE + '/system/handshake', { method: 'POST' });
+            } catch(e) {
+                console.warn("Frontend boot handshake warning:", e);
             }
             
+            // Instantly transition UI out of BOOTING state to IDLE
             const overlay = document.getElementById('startup-overlay');
-            overlay.style.opacity = '0';
-            setTimeout(() => { overlay.style.display = 'none'; }, 600);
+            if (overlay) {
+                overlay.style.opacity = '0';
+                setTimeout(() => { overlay.style.display = 'none'; }, 400);
+            }
             
+            changeState('idle');
             animate();
             fetchConvList();
 
-            // 1. Automatically request mic permission and start speech recognition
-            await enableMic();
-
-            // 2. Automatically greet user verbally
-            const greeting = "Hello Sir. FALSO online. Systems initialized. How can I help you today?";
-            appendMessage('system', greeting);
-            await speak(greeting);
+            // Background non-blocking mic activation and verbal greeting
+            enableMic().then(async () => {
+                const greeting = "Hello Sir. FALSO online. Systems initialized. How can I help you today?";
+                appendMessage('system', greeting);
+                await speak(greeting);
+            }).catch(e => {
+                console.warn("Non-blocking mic init info:", e);
+            });
         }
 
         runStartup();

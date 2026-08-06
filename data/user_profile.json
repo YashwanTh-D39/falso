@@ -1,0 +1,35 @@
+{
+  "name": "Yashwanth",
+  "preferences": {
+    "language": "English",
+    "verbosity": "concise",
+    "tone": "helpful, natural, companion-like"
+  },
+  "projects": [
+    "Project-Falso"
+  ],
+  "coding_style": "Clean modular code, Python type hints, modern HTML5/JS",
+  "daily_routine": "Coding, AI research, testing local models",
+  "favorite_apps": [
+    "VS Code",
+    "Chrome",
+    "Terminal",
+    "Explorer"
+  ],
+  "common_folders": [
+    "c:/Users/Admin/Project-Falso",
+    "c:/Users/Admin/Downloads",
+    "c:/Users/Admin/Desktop"
+  ],
+  "frequently_used_websites": [
+    "github.com",
+    "duckduckgo.com"
+  ],
+  "devices": [
+    "Windows PC"
+  ],
+  "goals": [
+    "Build FALSO Spatial AI Companion",
+    "Optimize local LLM voice response latency"
+  ]
+}

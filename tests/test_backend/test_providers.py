@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+openai = pytest.importorskip("openai")
 from openai import APIConnectionError, RateLimitError
 
 from app.providers import AIProviderError

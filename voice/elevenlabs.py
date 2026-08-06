@@ -93,7 +93,7 @@ class ElevenLabsTTSEngine(BaseTTSEngine):
 
             audio_bytes = resp.content
             duration = max(0.5, len(clean_text) * 0.06)
-            logger.info("[TTS AUDIT Stage 4] ElevenLabs TTS success: generated %d MP3 audio bytes", len(audio_bytes))
+            logger.info("[TTS] ElevenLabs synthesized %d audio bytes", len(audio_bytes))
             return TTSResult(
                 audio_data=audio_bytes,
                 format="mp3",

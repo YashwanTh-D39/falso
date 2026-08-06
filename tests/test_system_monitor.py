@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 import app.main as main_module
 import app.routes.system as system_module
-from app.services.system_monitor import SystemMonitor
+from app.services.system_monitor import SystemMonitorService
 
 FAKE_GPU = {
     "gpu_util": 50.0,
