@@ -1,2676 +1,1177 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FALSO // CORE</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@300;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#020101;
-    --white:#f5ede6;
-    --ember:#ff2200;
-    --ember-dim:rgba(255,34,0,0.35);
-    --deepred:#6e0808;
-    --gold:#ffb020;
-    --line:rgba(255,34,0,0.18);
-    --panel-bg:rgba(6,3,2,0.78);
-    --f-display:'Orbitron',sans-serif;
-    --f-body:'Rajdhani',sans-serif;
-    --f-mono:'JetBrains Mono',monospace;
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F.A.L.S.O. // AI CORE ONLINE</title>
+    <style>
+        :root {
+            --color-amber: #ffaa30;
+            --color-amber-dim: #dd7700;
+            --color-bg-dark: rgba(10, 5, 0, 0.85);
+            --font-mono: "Courier New", Courier, monospace;
+        }
 
-  *{ box-sizing:border-box; margin:0; padding:0; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            color: var(--color-amber);
+            font-family: var(--font-mono);
+            overflow: hidden;
+            user-select: none;
+        }
 
-  html,body{
-    width:100%; height:100%;
-    background:var(--bg);
-    overflow:hidden;
-    font-family:var(--f-body);
-    color:var(--white);
-    -webkit-font-smoothing:antialiased;
-  }
+        /* 3D Orb Background */
+        #orb-root {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
 
-  /* Startup overlay */
-  #startup{
-    position:fixed;inset:0;z-index:100;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    background:var(--bg);
-    transition:opacity 0.8s ease,transform 0.8s ease;
-  }
-  #startup.done{opacity:0;transform:scale(1.05);pointer-events:none}
-  #startup .logo{
-    font-family:var(--f-display);font-weight:900;
-    font-size:clamp(28px,3.2vw,42px);letter-spacing:0.5em;
-    color:var(--white);text-indent:0.5em;margin-bottom:32px;
-    text-shadow:0 0 40px rgba(255,34,0,0.15);
-  }
-  #startup .steps{display:flex;flex-direction:column;gap:10px;width:240px}
-  #startup .step{
-    display:flex;align-items:center;gap:12px;
-    font-family:var(--f-mono);font-size:12px;color:rgba(245,237,230,0.2);
-    opacity:0;transform:translateY(8px);transition:opacity 0.5s ease,transform 0.5s ease,color 0.3s ease;
-  }
-  #startup .step.active{opacity:1;transform:translateY(0);color:rgba(245,237,230,0.5)}
-  #startup .step.done{opacity:1;transform:translateY(0);color:var(--ember)}
-  #startup .step .dot{
-    width:6px;height:6px;border-radius:50%;flex-shrink:0;
-    background:currentColor;transition:box-shadow 0.3s ease;
-  }
-  #startup .step.done .dot{box-shadow:0 0 10px var(--ember-dim)}
-  #startup .step .label{letter-spacing:0.08em;text-transform:uppercase}
-  #startup .bar{
-    width:240px;height:1px;background:var(--line);margin-top:24px;overflow:hidden;
-  }
-  #startup .bar-fill{
-    height:100%;width:0%;background:var(--ember);
-    transition:width 0.4s ease;
-  }
+        /* Overlays */
+        .overlay-grain {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            opacity: 0.15;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
 
-  .grain{
-    position:fixed; inset:0; pointer-events:none; z-index:1;
-    background-image:radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);
-    background-size:3px 3px;
-    opacity:0.35;
-    mix-blend-mode:screen;
-  }
+        .overlay-scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 11;
+            background: linear-gradient(
+                to bottom,
+                rgba(255, 255, 255, 0),
+                rgba(255, 255, 255, 0) 50%,
+                rgba(0, 0, 0, 0.2) 50%,
+                rgba(0, 0, 0, 0.2)
+            );
+            background-size: 100% 4px;
+        }
 
-  .vignette{
-    position:fixed; inset:0; pointer-events:none; z-index:2;
-    background:radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.96) 100%);
-  }
+        .overlay-vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 12;
+            background: radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,0.9) 100%);
+        }
 
-  .heartbeat{
-    position:fixed; inset:0; pointer-events:none; z-index:2;
-    background:radial-gradient(ellipse at center, rgba(255,20,0,0) 55%, rgba(255,20,0,0.06) 100%);
-    opacity:0;
-  }
+        /* UI Containers */
+        #ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 20;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
 
-  .glitch-bands{
-    position:fixed; inset:0; pointer-events:none; z-index:9;
-    opacity:0;
-    mix-blend-mode:screen;
-  }
-  .glitch-bands.on{ animation:glitchFlicker 0.22s steps(2,end) 1; }
-  @keyframes glitchFlicker{
-    0%{ opacity:0; }
-    10%{ opacity:0.85; }
-    20%{ opacity:0; }
-    35%{ opacity:0.6; }
-    50%{ opacity:0; }
-    70%{ opacity:0.4; }
-    100%{ opacity:0; }
-  }
+        .hud-panel {
+            pointer-events: auto;
+            background: rgba(20, 10, 0, 0.6);
+            border: 1px solid var(--color-amber-dim);
+            box-shadow: 0 0 10px rgba(255, 170, 48, 0.2);
+            padding: 15px;
+            backdrop-filter: blur(4px);
+        }
 
-  .flash-red{
-    position:fixed; inset:0; pointer-events:none; z-index:10;
-    background:rgba(255,10,0,0.0);
-  }
-  .flash-red.hit{ animation:flashHit 0.5s ease-out 1; }
-  @keyframes flashHit{
-    0%{ background:rgba(255,10,0,0.35); }
-    100%{ background:rgba(255,10,0,0); }
-  }
+        /* Header */
+        #header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
 
-  .stage.shake{ animation:shakeFrame 0.4s ease-in-out; }
-  @keyframes shakeFrame{
-    0%{ transform:translate(0,0); }
-    15%{ transform:translate(-3px,2px); }
-    30%{ transform:translate(3px,-2px); }
-    45%{ transform:translate(-2px,-3px); }
-    60%{ transform:translate(2px,3px); }
-    75%{ transform:translate(-1px,1px); }
-    100%{ transform:translate(0,0); }
-  }
+        .title {
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px var(--color-amber);
+            margin: 0;
+        }
 
-  /* ─── Grid layout ─── */
-  body{
-    display:grid;
-    grid-template-columns: auto 1fr;
-    grid-template-rows:1fr auto;
-    height:100vh;
-  }
+        .status {
+            font-size: 14px;
+            animation: blink 2s infinite;
+        }
 
-  .dock{
-    grid-column:1; grid-row:1;
-    display:flex; flex-direction:column;
-    background:var(--panel-bg);
-    border-right:1px solid var(--line);
-    z-index:5;
-    min-width:0;
-    width:0;
-    overflow:hidden;
-    transition:width 0.45s cubic-bezier(.16,.9,.24,1);
-  }
-  .dock.open{
-    width:280px;
-  }
-  .dock .dock-head{
-    display:flex; border-bottom:1px solid var(--line); flex-shrink:0;
-  }
-  .dock .dock-tab{
-    flex:1; padding:10px 0; text-align:center;
-    font-family:var(--f-mono); font-size:9.5px; letter-spacing:0.2em;
-    text-transform:uppercase; cursor:pointer;
-    color:rgba(245,237,230,0.25);
-    transition:color 0.3s ease, background 0.3s ease;
-    user-select:none;
-  }
-  .dock .dock-tab:hover{ color:rgba(245,237,230,0.5); }
-  .dock .dock-tab.active{ color:var(--ember-dim); background:rgba(255,59,26,0.04); }
-  .dock .dock-body{
-    flex:1; overflow-y:auto; overflow-x:hidden;
-    display:none; flex-direction:column;
-    padding:8px 14px;
-  }
-  .dock .dock-body.active{ display:flex; }
-  .dock .dock-body::-webkit-scrollbar{width:3px}
-  .dock .dock-body::-webkit-scrollbar-track{background:transparent}
-  .dock .dock-body::-webkit-scrollbar-thumb{background:var(--line);border-radius:10px}
-  .dock-toggle-btn{
-    position:fixed; top:14px; left:278px; z-index:6;
-    width:22px; height:28px;
-    background:var(--panel-bg); border:1px solid var(--line); border-left:none;
-    cursor:pointer; display:flex; align-items:center; justify-content:center;
-    color:rgba(245,237,230,0.3); font-size:10px; font-family:var(--f-mono);
-    transition:color 0.3s ease, left 0.45s cubic-bezier(.16,.9,.24,1); user-select:none;
-  }
-  .dock-toggle-btn:hover{ color:var(--ember-dim); }
-  .dock-toggle-btn.closed{ left:0; }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
 
-  .stage{
-    grid-column:2; grid-row:1;
-    display:flex; align-items:center; justify-content:center;
-    min-height:0;
-  }
+        /* Diagnostics */
+        #diagnostics {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 250px;
+            font-size: 12px;
+        }
 
-  .core-column{
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    transform:translateY(-2.5vh);
-  }
+        /* Chat Area */
+        #chat-area {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            max-width: 800px;
+            max-height: 40vh;
+            overflow-y: auto;
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px;
+            mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+            -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+        }
 
-  #orbCanvas{
-    width:min(38vw, 380px);
-    height:min(38vw, 380px);
-    display:block;
-  }
+        .message {
+            background: rgba(255, 170, 48, 0.1);
+            border-left: 3px solid var(--color-amber);
+            padding: 10px;
+            font-size: 14px;
+            line-height: 1.4;
+            text-shadow: 0 0 2px var(--color-amber);
+        }
 
-  .logo{
-    font-family:var(--f-display);
-    font-weight:900;
-    font-size:clamp(20px, 2.2vw, 28px);
-    letter-spacing:0.5em;
-    color:var(--white);
-    text-indent:0.5em;
-    margin-top:4px;
-    opacity:0.95;
-    user-select:none;
-    text-shadow:0 0 18px rgba(255,34,0,0.35);
-  }
-  .logo.glitching{
-    animation:textGlitch 0.22s steps(2,end) 1;
-  }
-  @keyframes textGlitch{
-    0%{ transform:translate(0,0); text-shadow:0 0 18px rgba(255,34,0,0.35); }
-    25%{ transform:translate(-2px,1px); text-shadow:2px 0 0 rgba(255,0,0,0.6), -2px 0 0 rgba(0,255,255,0.25); }
-    50%{ transform:translate(2px,-1px); text-shadow:-2px 0 0 rgba(255,0,0,0.6), 2px 0 0 rgba(0,255,255,0.25); }
-    75%{ transform:translate(-1px,0); text-shadow:0 0 18px rgba(255,34,0,0.5); }
-    100%{ transform:translate(0,0); text-shadow:0 0 18px rgba(255,34,0,0.35); }
-  }
+        .message.user {
+            border-left: none;
+            border-right: 3px solid #ffcc66;
+            background: rgba(255, 204, 102, 0.1);
+            align-self: flex-end;
+            text-align: right;
+            color: #ffcc66;
+        }
 
-  .status{
-    margin-top:14px;
-    font-family:var(--f-body);
-    font-weight:600;
-    font-size:11px;
-    letter-spacing:0.42em;
-    text-indent:0.42em;
-    text-transform:uppercase;
-    color:var(--ember-dim);
-    height:14px;
-    transition:color 0.6s ease;
-    user-select:none;
-  }
-  .status.err{ color: var(--gold); }
+        #tool-indicator {
+            display: none;
+            font-size: 12px;
+            color: #ffcc66;
+            animation: pulse 1s infinite;
+        }
 
-  .think-indicator{
-    font-family:var(--f-mono);
-    font-size:10px;
-    letter-spacing:0.15em;
-    color:var(--ember-dim);
-    height:16px;
-    margin-top:4px;
-    opacity:0;
-    transition:opacity 0.5s ease;
-    user-select:none;
-  }
-  .think-indicator.show{opacity:1}
-  .tool-indicator{
-    font-family:var(--f-mono); font-size:9px; letter-spacing:0.08em;
-    color:var(--ember-dim); text-align:center; margin-top:4px;
-    opacity:0; transition:opacity 0.3s ease;
-    text-transform:uppercase;
-  }
-  .tool-indicator.show{opacity:1}
-  .tool-indicator .spinner{display:inline-block;animation:spin 1.2s linear infinite;}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .think-indicator .dots::after{
-    content:'';
-    animation:thinkDots 1.5s steps(4,end) infinite;
-  }
-  @keyframes thinkDots{
-    0%{content:''}
-    25%{content:'.'}
-    50%{content:'..'}
-    75%{content:'...'}
-    100%{content:''}
-  }
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
 
-  .response-line{
-    margin-top:26px;
-    width:min(72vw, 580px);
-    text-align:center;
-    font-family:var(--f-mono);
-    font-size:13px;
-    line-height:1.6;
-    color:rgba(245,237,230,0.75);
-    letter-spacing:0.01em;
-    opacity:0;
-    transition:opacity 0.8s ease;
-    pointer-events:none;
-  }
-  .response-line.show{ opacity:1; }
+        /* Input Bar */
+        #command-bar {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            max-width: 800px;
+            display: flex;
+            gap: 10px;
+        }
 
-  .command-dock{
-    grid-column:1/-1; grid-row:2;
-    justify-self:center;
-    width:min(46vw, 480px);
-    padding:0 0 5vh 0;
-    z-index:6;
-  }
+        input[type="text"] {
+            flex: 1;
+            background: rgba(10, 5, 0, 0.8);
+            border: 1px solid var(--color-amber);
+            color: var(--color-amber);
+            font-family: var(--font-mono);
+            font-size: 16px;
+            padding: 10px 15px;
+            outline: none;
+            box-shadow: inset 0 0 10px rgba(255, 170, 48, 0.2);
+        }
 
-  .command-line{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    border-bottom:1px solid var(--line);
-    padding-bottom:10px;
-    transition:border-color 0.4s ease;
-  }
-  .command-line.active{ border-color:rgba(255,59,26,0.55); }
+        input[type="text"]:focus {
+            box-shadow: inset 0 0 15px rgba(255, 170, 48, 0.5), 0 0 10px rgba(255, 170, 48, 0.5);
+        }
 
-  .prompt-glyph{
-    font-family:var(--f-mono);
-    color:var(--ember);
-    font-size:14px;
-    opacity:0.85;
-    flex-shrink:0;
-  }
+        button {
+            background: rgba(255, 170, 48, 0.2);
+            border: 1px solid var(--color-amber);
+            color: var(--color-amber);
+            font-family: var(--font-mono);
+            font-size: 14px;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
 
-  #cmdInput{
-    flex:1;
-    background:transparent;
-    border:none;
-    outline:none;
-    color:var(--white);
-    font-family:var(--f-mono);
-    font-size:13px;
-    letter-spacing:0.02em;
-    caret-color:var(--ember);
-  }
-  #cmdInput::placeholder{
-    color:rgba(245,237,230,0.28);
-  }
+        button:hover {
+            background: var(--color-amber);
+            color: #000;
+            box-shadow: 0 0 15px var(--color-amber);
+        }
 
-  .hint-row{
-    display:flex;
-    justify-content:space-between;
-    margin-top:8px;
-    font-family:var(--f-mono);
-    font-size:9.5px;
-    letter-spacing:0.08em;
-    color:rgba(245,237,230,0.22);
-    text-transform:uppercase;
-  }
-  .hint-row span{ cursor:pointer; transition:color 0.3s ease; }
-  .hint-row span:hover{ color:var(--ember-dim); }
+        button.active {
+            background: #ffcc66;
+            color: #000;
+            box-shadow: 0 0 20px #ffcc66;
+        }
 
-  .mic-toggle{
-    position:fixed;
-    bottom:5vh;
-    left:calc(50% - min(46vw, 480px)/2 - 46px);
-    width:30px; height:30px;
-    border:1px solid var(--line);
-    display:flex; align-items:center; justify-content:center;
-    cursor:pointer;
-    z-index:6;
-    transition:border-color 0.3s ease, background 0.3s ease;
-    background:rgba(0,0,0,0.3);
-  }
-  .mic-toggle:hover{ border-color:var(--ember-dim); }
-  .mic-toggle.live{ border-color:var(--ember); background:rgba(255,59,26,0.08); }
-  .mic-toggle svg{ width:13px; height:13px; }
-  .mic-toggle path, .mic-toggle rect{ stroke:var(--ember-dim); transition:stroke 0.3s ease; fill:none; }
-  .mic-toggle.live path, .mic-toggle.live rect{ stroke:var(--ember); }
+        /* Side Panels */
+        .side-panel {
+            position: absolute;
+            top: 100px;
+            bottom: 100px;
+            width: 300px;
+            background: rgba(10, 5, 0, 0.9);
+            border: 1px solid var(--color-amber);
+            padding: 20px;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            pointer-events: auto;
+        }
 
-  .corner{
-    position:fixed;
-    width:14px; height:14px;
-    border-color:rgba(255,59,26,0.2);
-    z-index:4;
-  }
-  .corner.tl{ top:22px; left:22px; border-top:1px solid; border-left:1px solid; }
-  .corner.tr{ top:22px; right:22px; border-top:1px solid; border-right:1px solid; }
-  .corner.bl{ bottom:22px; left:22px; border-bottom:1px solid; border-left:1px solid; }
-  .corner.br{ bottom:22px; right:22px; border-bottom:1px solid; border-right:1px solid; }
+        #settings-panel {
+            right: 20px;
+            border-right: none;
+        }
 
-  .timestamp{
-    position:fixed; top:24px; left:44px;
-    font-family:var(--f-mono); font-size:10px; letter-spacing:0.05em;
-    color:rgba(245,237,230,0.28); z-index:4;
-  }
-  .sysid{
-    position:fixed; top:24px; right:44px;
-    font-family:var(--f-mono); font-size:10px; letter-spacing:0.05em;
-    color:rgba(245,237,230,0.28); z-index:4; text-align:right;
-  }
+        #archive-panel {
+            left: 20px;
+            border-left: none;
+        }
 
-  .panel{
-    position:fixed;
-    background:var(--panel-bg);
-    border:1px solid var(--line);
-    backdrop-filter:blur(14px);
-    -webkit-backdrop-filter:blur(14px);
-    z-index:7;
-    font-family:var(--f-mono);
-    opacity:0;
-    pointer-events:none;
-  }
+        .panel-header {
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 1px solid var(--color-amber-dim);
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
 
-  .panel-head{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    padding:12px 16px;
-    border-bottom:1px solid var(--line);
-    font-size:10.5px;
-    letter-spacing:0.24em;
-    color:var(--ember);
-    text-transform:uppercase;
-  }
-  .panel-head .dim{ color:rgba(245,237,230,0.32); letter-spacing:0.05em; }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
 
-  .panel-body{ padding:14px 16px; }
+        .form-group label {
+            font-size: 12px;
+            color: var(--color-amber-dim);
+        }
 
-  .file-row{
-    display:flex; justify-content:space-between; align-items:baseline;
-    padding:9px 0;
-    border-bottom:1px solid rgba(255,255,255,0.05);
-    font-size:11.5px;
-    color:rgba(245,237,230,0.78);
-    cursor:pointer;
-    transition:color 0.3s ease;
-  }
-  .file-row:hover{ color:var(--ember-dim); }
-  .file-row .fname{ letter-spacing:0.01em; }
-  .file-row .fmeta{ color:rgba(245,237,230,0.3); font-size:10px; }
+        select, input[type="password"] {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--color-amber-dim);
+            color: var(--color-amber);
+            font-family: var(--font-mono);
+            padding: 5px;
+        }
 
-  #panelDiag{
-    top:50%; right:44px;
-    transform:translate(0,-50%) translateX(24px);
-    width:230px;
-    z-index:10;
-    transition:transform 0.55s cubic-bezier(.16,.9,.24,1), opacity 0.45s ease;
-  }
-  #panelDiag.visible{ transform:translate(0,-50%) translateX(0); opacity:1; pointer-events:auto; }
+        /* HUD Hints & Controls */
+        #hud-hints {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            font-size: 10px;
+            color: var(--color-amber-dim);
+        }
 
-  .chat-msg{
-    margin-bottom:12px; line-height:1.6;
-  }
-  .chat-msg.user{ text-align:right; }
-  .chat-msg .sender{
-    display:inline-block; font-size:9px; letter-spacing:0.08em;
-    text-transform:uppercase; margin-bottom:3px;
-    font-family:var(--f-mono);
-  }
-  .chat-msg.user .sender{ color:rgba(245,237,230,0.45); }
-  .chat-msg.ai .sender{ color:var(--ember-dim); }
-  .chat-msg .bubble{
-    display:inline-block; text-align:left;
-    font-size:12px; color:rgba(245,237,230,0.85);
-    padding:6px 10px; border-radius:3px;
-    font-family:var(--f-mono); letter-spacing:0.02em;
-  }
-  .chat-msg.user .bubble{
-    background:rgba(255,255,255,0.04);
-  }
-  .chat-msg.ai .bubble{
-    background:rgba(255,59,26,0.04);
-    max-width:100%;
-  }
-  .chat-msg .bubble pre{
-    margin:6px 0; padding:6px 8px;
-    background:rgba(0,0,0,0.35);
-    border-left:2px solid rgba(255,176,32,0.3);
-    overflow-x:auto;
-    font-size:11px; line-height:1.5;
-  }
-  .chat-msg .bubble code{
-    font-family:var(--f-mono); font-size:11px;
-    background:rgba(0,0,0,0.25); padding:1px 4px; border-radius:2px;
-  }
-  .chat-msg .bubble pre code{
-    background:none; padding:0;
-  }
-  .chat-msg .bubble p{ margin:4px 0; }
-  .chat-msg .bubble p:first-child{ margin-top:0; }
-  .chat-msg .bubble p:last-child{ margin-bottom:0; }
-  .chat-msg .bubble ul, .chat-msg .bubble ol{ margin:4px 0; padding-left:18px; }
+        #hud-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
 
-  .gauge-row{ margin-bottom:14px; }
-  .gauge-label{
-    display:flex; justify-content:space-between;
-    font-size:10px; letter-spacing:0.1em; color:rgba(245,237,230,0.5);
-    margin-bottom:5px; text-transform:uppercase;
-  }
-  .gauge-track{
-    width:100%; height:4px; background:rgba(255,255,255,0.06); position:relative; overflow:hidden;
-  }
-  .gauge-fill{
-    height:100%; background:linear-gradient(90deg, var(--deepred), var(--ember));
-    width:0%; transition:width 0.4s ease;
-  }
+        /* Startup Animation */
+        #startup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1s ease-in-out;
+        }
 
-  #panelNet{
-    top:44px; left:50%; transform:translateX(-50%) translateY(-16px);
-    width:min(60vw, 460px);
-    padding:0;
-    transition:transform 0.5s ease, opacity 0.45s ease;
-  }
-  #panelNet.visible{ transform:translateX(-50%) translateY(0); opacity:1; pointer-events:auto; }
-  #netText{
-    font-size:11px; letter-spacing:0.14em; color:rgba(255,176,32,0.85);
-  }
+        #startup-log {
+            font-size: 14px;
+            margin-top: 20px;
+            min-height: 20px;
+        }
 
-  .hand-indicator{
-    font-family:var(--f-mono); font-size:9px; letter-spacing:0.12em;
-    text-transform:uppercase; margin-top:6px; height:14px;
-    color:rgba(245,237,230,0.25); text-align:center;
-    transition:color 0.3s ease;
-    user-select:none;
-  }
-  .hand-indicator.active{ color:var(--ember-dim); }
-  .hand-indicator .dot{
-    display:inline-block; width:5px; height:5px; border-radius:50%;
-    background:rgba(245,237,230,0.2); vertical-align:middle; margin-right:5px;
-    transition:background 0.3s ease, box-shadow 0.3s ease;
-  }
-  .hand-indicator.active .dot{
-    background:var(--ember); box-shadow:0 0 8px var(--ember-dim);
-  }
-  ::selection{ background:rgba(255,59,26,0.3); }
-  #stabilityMeter{ user-select:none; }
-  #reconstructionText{ user-select:none; }
-</style>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+        .progress-bar-container {
+            width: 300px;
+            height: 2px;
+            background: rgba(255, 170, 48, 0.2);
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--color-amber);
+            width: 0%;
+            transition: width 0.2s;
+            box-shadow: 0 0 10px var(--color-amber);
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--color-amber-dim);
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--color-amber);
+        }
+    </style>
+    
+    <!-- Three.js Import Map -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+        }
+    }
+    </script>
 </head>
 <body>
+    <div id="orb-root"></div>
+    <div class="overlay-grain"></div>
+    <div class="overlay-scanlines"></div>
+    <div class="overlay-vignette"></div>
 
-<!-- Startup overlay -->
-<div id="startup">
-  <div class="logo">FALSO</div>
-  <div class="steps">
-    <div class="step" data-step="0"><span class="dot"></span><span class="label">Initializing Core</span></div>
-    <div class="step" data-step="1"><span class="dot"></span><span class="label">Loading Memory</span></div>
-    <div class="step" data-step="2"><span class="dot"></span><span class="label">Loading Tools</span></div>
-    <div class="step" data-step="3"><span class="dot"></span><span class="label">FALSO Online</span></div>
-  </div>
-  <div class="bar"><div class="bar-fill" id="startupBar"></div></div>
-</div>
-
-<div class="grain"></div>
-<div class="vignette"></div>
-<div class="heartbeat" id="heartbeat"></div>
-<div class="glitch-bands" id="glitchBands"></div>
-<div class="flash-red" id="flashRed"></div>
-
-<div class="corner tl"></div>
-<div class="corner tr"></div>
-<div class="corner bl"></div>
-<div class="corner br"></div>
-
-<div class="timestamp" id="timestamp">SYS.CLOCK — 00:00:00</div>
-<div class="sysid">FALSO // STANDBY<br>AI CORE READY</div>
-
-<div class="dock-toggle-btn" id="dockToggleBtn">▶</div>
-<div class="dock open" id="leftDock">
-  <div class="dock-head">
-    <div class="dock-tab" data-docktab="thread">THREAD</div>
-    <div class="dock-tab active" data-docktab="sessions">SESSIONS</div>
-  </div>
-  <div class="dock-body" id="dockThread">
-    <div id="chatBody"></div>
-  </div>
-  <div class="dock-body active" id="dockSessions">
-    <div id="archiveBody"></div>
-  </div>
-</div>
-
-<div class="stage" id="stage">
-  <div class="core-column">
-    <canvas id="orbCanvas" width="400" height="400"></canvas>
-    <div class="logo">FALSO</div>
-    <div class="status" id="statusText">DORMANT</div>
-    <div class="think-indicator" id="thinkIndicator">Thinking<span class="dots"></span></div>
-    <div class="tool-indicator" id="toolIndicator"></div>
-    <div class="hand-indicator" id="handIndicator"><span class="dot"></span>HAND — STANDBY</div>
-    <div class="response-line" id="responseLine"></div>
-  </div>
-</div>
-
-<div class="mic-toggle" id="micToggle" title="Voice input">
-  <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0"/><rect x="11" y="19" width="2" height="3"/></svg>
-</div>
-
-<div class="command-dock">
-  <div class="command-line" id="commandLine">
-    <span class="prompt-glyph">▸</span>
-    <input id="cmdInput" type="text" placeholder="Speak, or type a directive..." autocomplete="off" spellcheck="false">
-  </div>
-  <div class="hint-row">
-    <span data-hint="toggle dock">SIDE PANEL</span>
-    <span data-hint="run core diagnostics">CORE SCAN</span>
-    <span data-hint="settings">SETTINGS</span>
-    <span data-hint="list files">LOCAL FS</span>
-    <span data-hint="new conversation">NEW CHAT</span>
-  </div>
-</div>
-
-<!-- Core diagnostics panel (overlay) -->
-<div class="panel" id="panelDiag">
-  <div class="panel-head">
-    <span>CORE INTEGRITY</span>
-  </div>
-  <div class="panel-body" style="padding:10px 14px">
-    <div class="gauge-row">
-      <div class="gauge-label"><span>CPU</span><span id="cpuVal">—</span></div>
-      <div class="gauge-track"><div class="gauge-fill" id="cpuFill" style="width:0%"></div></div>
-      <div style="font-size:9px;color:rgba(245,237,230,0.35);margin-top:2px;font-family:var(--f-mono);letter-spacing:0.05em">Temp: <span id="cpuTemp">N/A</span></div>
-    </div>
-    <div class="gauge-row">
-      <div class="gauge-label"><span>RAM</span><span id="memVal">—</span></div>
-      <div class="gauge-track"><div class="gauge-fill" id="memFill" style="width:0%"></div></div>
-      <div style="font-size:9px;color:rgba(245,237,230,0.35);margin-top:2px;font-family:var(--f-mono);letter-spacing:0.05em"><span id="ramUsed">—</span> / <span id="ramTotal">—</span></div>
-    </div>
-    <div class="gauge-row">
-      <div class="gauge-label"><span>GPU</span><span id="gpuVal">N/A</span></div>
-      <div class="gauge-track"><div class="gauge-fill" id="gpuFill" style="width:0%"></div></div>
-      <div style="font-size:9px;color:rgba(245,237,230,0.35);margin-top:2px;font-family:var(--f-mono);letter-spacing:0.05em">VRAM: <span id="vramUsed">N/A</span> / <span id="vramTotal">N/A</span> &middot; Temp: <span id="gpuTemp">N/A</span></div>
-    </div>
-    <div class="gauge-row">
-      <div class="gauge-label"><span>DISK</span><span id="diskVal">—</span></div>
-      <div class="gauge-track"><div class="gauge-fill" id="diskFill" style="width:0%"></div></div>
-      <div style="font-size:9px;color:rgba(245,237,230,0.35);margin-top:2px;font-family:var(--f-mono);letter-spacing:0.05em"><span id="diskUsed">—</span> / <span id="diskTotal">—</span></div>
-    </div>
-    <div class="gauge-row">
-      <div class="gauge-label"><span>BATTERY</span><span id="batVal">N/A</span></div>
-      <div style="font-size:9px;color:rgba(245,237,230,0.35);margin-top:2px;font-family:var(--f-mono);letter-spacing:0.05em" id="batStatus">No battery detected</div>
-    </div>
-    <div class="gauge-row" style="margin-bottom:0">
-      <div class="gauge-label"><span>NETWORK</span></div>
-      <div style="font-size:9px;color:rgba(245,237,230,0.35);margin-top:2px;font-family:var(--f-mono);letter-spacing:0.05em">↓ <span id="netDown">0</span> B/s &middot; ↑ <span id="netUp">0</span> B/s</div>
-    </div>
-  </div>
-</div>
-
-<!-- Network notification panel (overlay) -->
-<div class="panel" id="panelNet">
-  <div class="panel-body">
-    <div id="netText">FALSO // READY</div>
-  </div>
-</div>
-
-<!-- AI Provider Settings panel (overlay) -->
-<div class="panel" id="panelSettings" style="top:50%;right:44px;transform:translate(0,-50%) translateX(24px);width:290px;z-index:90;opacity:0;pointer-events:none;transition:transform 0.45s cubic-bezier(.16,.9,.24,1),opacity 0.35s ease">
-  <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center">
-    <span>SYSTEM & VOICE CONFIGURATION</span>
-    <span id="closeSettingsBtn" style="cursor:pointer;font-weight:700;padding:2px 6px">✕</span>
-  </div>
-  <div class="panel-body" style="padding:14px;display:flex;flex-direction:column;gap:12px">
-    <!-- AI BRAIN SECTION -->
-    <div style="border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--ember);letter-spacing:0.1em;margin-bottom:8px">AI BRAIN PROVIDER</div>
-      <div style="margin-bottom:8px">
-        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">PRIMARY PROVIDER</label>
-        <select id="settingProvider" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
-          <option value="gemini">Gemini (Google AI Studio — Default)</option>
-          <option value="openai">OpenAI (Optional Cloud)</option>
-          <option value="ollama">Ollama (Local)</option>
-        </select>
-      </div>
-      <div style="margin-bottom:8px">
-        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">GEMINI API KEY</label>
-        <input type="password" id="settingGeminiKey" placeholder="Paste GEMINI_API_KEY..." style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px" />
-      </div>
-      <div>
-        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">GEMINI MODEL</label>
-        <select id="settingGeminiModel" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
-          <option value="gemini-3.6-flash">gemini-3.6-flash (Default / Fast)</option>
-          <option value="gemini-3.1-flash">gemini-3.1-flash (Ultra Fast)</option>
-          <option value="gemini-3.1-pro">gemini-3.1-pro (Deep Reasoning)</option>
-          <option value="gemini-1.5-flash">gemini-1.5-flash (Standard)</option>
-          <option value="gemini-1.5-pro">gemini-1.5-pro (Legacy Pro)</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- VOICE & TTS SECTION -->
-    <div>
-      <div style="font-size:10px;font-weight:700;color:var(--ember);letter-spacing:0.1em;margin-bottom:8px">VOICE & TTS SYNTHESIS</div>
-      <div style="margin-bottom:8px">
-        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">TTS PROVIDER</label>
-        <select id="settingTTSProvider" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
-          <option value="elevenlabs">ElevenLabs (High Fidelity Cloud)</option>
-          <option value="edge">Edge Neural TTS</option>
-          <option value="local">Local TTS (pyttsx3 / System SAPI5)</option>
-        </select>
-      </div>
-      <div style="margin-bottom:8px">
-        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">ELEVENLABS API KEY</label>
-        <div style="display:flex;gap:4px">
-          <input type="password" id="settingElevenLabsKey" placeholder="Paste ELEVENLABS_API_KEY..." style="flex:1;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px" />
-          <button id="toggleElKeyBtn" type="button" style="background:rgba(255,255,255,0.1);color:var(--white);border:1px solid var(--line);padding:4px 8px;font-size:11px;cursor:pointer" title="Show/Hide Key">👁️</button>
+    <div id="startup-overlay">
+        <h1 class="title" style="font-size: 48px;">F.A.L.S.O.</h1>
+        <div id="startup-log">INITIALIZING...</div>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="startup-progress"></div>
         </div>
-      </div>
-      <div>
-        <label style="font-size:10px;letter-spacing:0.08em;color:rgba(245,237,230,0.6);display:block;margin-bottom:4px">ELEVENLABS VOICE</label>
-        <select id="settingElevenLabsVoice" style="width:100%;background:rgba(10,5,3,0.9);color:var(--white);border:1px solid var(--line);padding:6px;font-family:var(--f-mono);font-size:11px">
-          <option value="21m00Tcm4TlvDq8ikWAM">Rachel (Default / Female)</option>
-        </select>
-      </div>
     </div>
 
-    <!-- ACTION BUTTONS -->
-    <div style="display:flex;gap:6px;margin-top:4px">
-      <button id="saveSettingsBtn" style="flex:1;background:var(--ember);color:var(--bg);border:none;padding:8px;font-family:var(--f-display);font-size:10px;font-weight:700;letter-spacing:0.1em;cursor:pointer">SAVE SETTINGS</button>
-      <button id="testConnBtn" style="background:rgba(255,255,255,0.1);color:var(--white);border:1px solid var(--line);padding:6px 10px;font-family:var(--f-mono);font-size:10px;cursor:pointer">TEST AI</button>
-      <button id="testVoiceBtn" style="background:rgba(255,255,255,0.1);color:var(--white);border:1px solid var(--line);padding:6px 10px;font-family:var(--f-mono);font-size:10px;cursor:pointer">TEST VOICE</button>
+    <div id="ui-layer">
+        <div id="header">
+            <div>
+                <h1 class="title">F.A.L.S.O.</h1>
+                <div class="status">SYSTEM READY // AI CORE ONLINE</div>
+            </div>
+            <div class="sysid">FALSO // AI CORE ONLINE</div>
+        </div>
+
+        <div id="diagnostics" class="hud-panel">
+            <div class="panel-header">DIAGNOSTICS</div>
+            <div id="diag-content">
+                SYS.MEM: 1024 MB<br>
+                LATENCY: 42 ms<br>
+                UPTIME: 00:00:00<br>
+                STATE: IDLE
+            </div>
+        </div>
+
+        <div id="archive-panel" class="side-panel">
+            <div class="panel-header">ARCHIVE</div>
+            <div id="conv-list"></div>
+            <button onclick="newConversation()">NEW CONVERSATION</button>
+        </div>
+
+        <div id="settings-panel" class="side-panel">
+            <div class="panel-header">SETTINGS</div>
+            <div class="form-group">
+                <label>AI PROVIDER</label>
+                <select id="set-provider">
+                    <option value="gemini">Gemini</option>
+                    <option value="openai">OpenAI</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>API KEY</label>
+                <input type="password" id="set-key">
+            </div>
+            <div class="form-group">
+                <label>MODEL</label>
+                <select id="set-model">
+                    <option value="gemini-3.6-flash">gemini-3.6-flash (Default)</option>
+                    <option value="gemini-3.1-flash">gemini-3.1-flash</option>
+                    <option value="gemini-3.1-pro">gemini-3.1-pro</option>
+                    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                    <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>TTS PROVIDER</label>
+                <select id="set-tts-provider">
+                    <option value="elevenlabs">ElevenLabs (Cloud)</option>
+                    <option value="edge">Edge Neural TTS</option>
+                    <option value="local">Local TTS (pyttsx3)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>ELEVENLABS API KEY</label>
+                <input type="password" id="set-el-key" placeholder="Paste ElevenLabs key...">
+            </div>
+            <div class="form-group">
+                <label>ELEVENLABS VOICE</label>
+                <select id="set-el-voice">
+                    <option value="21m00Tcm4TlvDq8ikWAM">Rachel (Default)</option>
+                </select>
+            </div>
+            <button onclick="saveSettings()">SAVE CONFIG</button>
+            <button onclick="testConnection()">TEST CONN</button>
+            <button onclick="testVoice()">TEST VOICE</button>
+        </div>
+
+        <div id="chat-area">
+            <!-- Messages will appear here -->
+        </div>
+
+        <div id="toolIndicator" style="display:none;font-size:11px;color:#ffcc66;text-align:center;margin-bottom:6px"></div>
+
+        <div id="command-bar" class="hud-panel">
+            <button id="btn-mic">MIC [OFF]</button>
+            <input type="text" id="cmd-input" placeholder="Enter command or query..." autocomplete="off">
+            <button id="btn-send">SEND</button>
+        </div>
+
+        <div id="hud-hints">
+            [CMD+S] Settings | [CMD+A] Archive | [ESC] Reset View
+        </div>
+
+        <div id="hud-controls">
+            <button onclick="togglePanel('archive-panel')">ARCHIVE</button>
+            <button onclick="togglePanel('settings-panel')">SETTINGS</button>
+            <button id="btn-reset-cam">RESET CAM</button>
+        </div>
     </div>
-    <div id="settingsToast" style="font-size:10px;color:var(--gold);font-family:var(--f-mono);display:none;margin-top:4px"></div>
-  </div>
-</div>
 
-<script>
-(function(){
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
-  const API_BASE = '/api/v1';
-  const CONV_API = API_BASE + '/conversations';
-  const ACTIVE_KEY = 'falso_active_id';
+        // ==========================================
+        // FALSO BACKEND INTEGRATION
+        // ==========================================
+        const API_BASE = '/api/v1';
+        const CONV_API = API_BASE + '/conversations';
+        const ACTIVE_KEY = 'falso_active_conv';
 
-  /* ─── Audio feedback ─── */
-  let audioCtx = null;
-  function getAudioCtx(){
-    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if(audioCtx.state === 'suspended') audioCtx.resume();
-    return audioCtx;
-  }
-  function tone(freq, duration, type, vol){
-    try{
-      const c = getAudioCtx();
-      const o = c.createOscillator();
-      const g = c.createGain();
-      o.type = type || 'sine';
-      o.frequency.value = freq;
-      g.gain.setValueAtTime(vol||0.08, c.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
-      o.connect(g).connect(c.destination);
-      o.start(c.currentTime);
-      o.stop(c.currentTime + duration);
-    }catch(_){}
-  }
-  const audioFeed = {
-    startup(){
-      tone(220, 0.12, 'triangle', 0.10);
-      setTimeout(()=>tone(330, 0.12, 'triangle', 0.10), 120);
-      setTimeout(()=>tone(440, 0.2, 'triangle', 0.10), 240);
-      setTimeout(()=>tone(660, 0.35, 'sine', 0.06), 400);
-    },
-    listen(){
-      tone(880, 0.06, 'sine', 0.05);
-    },
-    think(){
-      tone(120, 0.3, 'sine', 0.03);
-    },
-    done(){
-      tone(660, 0.08, 'sine', 0.05);
-      setTimeout(()=>tone(440, 0.12, 'triangle', 0.04), 80);
-    },
-    error(){
-      tone(180, 0.15, 'sawtooth', 0.06);
-      setTimeout(()=>tone(140, 0.25, 'sawtooth', 0.05), 150);
-    }
-  };
-
-  /* ─── Startup ─── */
-  async function runStartup(){
-    const steps = document.querySelectorAll('#startup .step');
-    const bar = document.getElementById('startupBar');
-    const delay = ms => new Promise(r => setTimeout(r, ms));
-    for(let i = 0; i < steps.length; i++){
-      steps[i].classList.add('active');
-      bar.style.width = ((i + 1) / steps.length * 100) + '%';
-      await delay(400 + Math.random() * 300);
-      steps[i].classList.remove('active');
-      steps[i].classList.add('done');
-      await delay(200);
-    }
-    await delay(400);
-    audioFeed.startup();
-    document.getElementById('startup').classList.add('done');
-  }
-  runStartup();
-
-  /* ─── Clock ─── */
-  function tickClock(){
-    const d = new Date();
-    const h = String(d.getHours()).padStart(2,'0');
-    const m = String(d.getMinutes()).padStart(2,'0');
-    const s = String(d.getSeconds()).padStart(2,'0');
-    document.getElementById('timestamp').textContent = `SYS.CLOCK — ${h}:${m}:${s}`;
-  }
-  tickClock();
-  setInterval(tickClock, 1000);
-
-  /* ─── State machine ─── */
-  const statusEl = document.getElementById('statusText');
-  const cmdLine = document.getElementById('commandLine');
-  let stateName = 'idle';
-  const STATE_LABEL = {
-    idle:'DORMANT',
-    listening:'LISTENING',
-    thinking:'PROCESSING',
-    speaking:'TRANSMITTING',
-    error:'DISRUPTION DETECTED'
-  };
-  function setState(name){
-    stateName = name;
-    statusEl.textContent = STATE_LABEL[name] || name.toUpperCase();
-    statusEl.classList.toggle('err', name === 'error');
-    cmdLine.classList.toggle('active', name === 'listening' || name === 'speaking');
-    const ti = document.getElementById('thinkIndicator');
-    if(ti) ti.classList.toggle('show', name === 'thinking');
-    if(audioFeed[name]) audioFeed[name]();
-  }
-
-  /* ─── Canvas — cracked molten core ─── */
-  const canvas = document.getElementById('orbCanvas');
-  const ctx = canvas.getContext('2d');
-  const DPR = Math.min(window.devicePixelRatio || 1, 2);
-  function resizeCanvas(){
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * DPR;
-    canvas.height = rect.height * DPR;
-    ctx.setTransform(DPR,0,0,DPR,0,0);
-  }
-  window.addEventListener('resize', resizeCanvas);
-  resizeCanvas();
-
-  let audioAmp = 0;
-  let t = 0;
-
-  function seededRand(seed){
-    let s = seed;
-    return function(){
-      s = (s * 9301 + 49297) % 233280;
-      return s / 233280;
-    };
-  }
-  const rnd = seededRand(1337);
-
-  function genFissure(cx, cy, baseR){
-    const branches = [];
-    const startAngle = rnd()*Math.PI*2;
-    let x = cx + Math.cos(startAngle)*baseR*0.15;
-    let y = cy + Math.sin(startAngle)*baseR*0.15;
-    let angle = startAngle + (rnd()-0.5)*1.2;
-    const pts = [{x,y}];
-    const segs = 6 + Math.floor(rnd()*4);
-    for(let i=0;i<segs;i++){
-      const len = baseR*(0.09 + rnd()*0.07);
-      angle += (rnd()-0.5)*1.1;
-      x += Math.cos(angle)*len;
-      y += Math.sin(angle)*len;
-      pts.push({x,y});
-      if(rnd() > 0.72 && i < segs-1){
-        branches.push(genSubBranch(x,y,angle,baseR*0.35));
-      }
-    }
-    return { main: pts, branches };
-  }
-  function genSubBranch(x0,y0,angle0,len0){
-    let x=x0, y=y0, angle=angle0 + (rnd()-0.5)*1.6;
-    const pts=[{x,y}];
-    const segs = 2 + Math.floor(rnd()*3);
-    for(let i=0;i<segs;i++){
-      const len = len0*(0.4+rnd()*0.5)/segs;
-      angle += (rnd()-0.5)*1.0;
-      x += Math.cos(angle)*len;
-      y += Math.sin(angle)*len;
-      pts.push({x,y});
-    }
-    return pts;
-  }
-
-  const cx0 = 200, cy0 = 200, baseR0 = 150;
-  const FISSURES = [];
-  for(let i=0;i<9;i++) FISSURES.push(genFissure(cx0, cy0, baseR0));
-
-  // Electrical arcs for thinking state
-  const ARCS = [];
-  for(let i=0;i<6;i++){
-    const pts=[];
-    const a1=Math.random()*Math.PI*2;
-    const r1=baseR0*(0.4+Math.random()*0.5);
-    const a2=a1+(Math.random()-0.5)*1.2;
-    const r2=baseR0*(0.4+Math.random()*0.5);
-    let x=cx0+Math.cos(a1)*r1, y=cy0+Math.sin(a1)*r1;
-    for(let j=0;j<10;j++){
-      const t1=j/10;
-      const tx=cx0+Math.cos(a1+(a2-a1)*t1)*(r1+(r2-r1)*t1);
-      const ty=cy0+Math.sin(a1+(a2-a1)*t1)*(r1+(r2-r1)*t1);
-      x+=(tx-x)*0.3+(Math.random()-0.5)*12;
-      y+=(ty-y)*0.3+(Math.random()-0.5)*12;
-      pts.push({x,y});
-    }
-    ARCS.push(pts);
-  }
-
-  function drawPolyline(pts, col, width, alpha, glow){
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.strokeStyle = `rgba(${col},${alpha})`;
-    ctx.lineWidth = width;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    if(glow){
-      ctx.shadowColor = `rgba(${col},0.9)`;
-      ctx.shadowBlur = glow;
-    }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  }
-
-  function draw(){
-    try{
-    const w = canvas.width/DPR, h = canvas.height/DPR;
-    ctx.clearRect(0,0,w,h);
-    t += 0.016;
-
-    const SMOOTH_IDLE = 0.1, SMOOTH_SCALE = 0.08;
-
-    // Energy state management
-    const sizeRatio = smoothScale / 2.5;
-    if(energyState === 'normal' && smoothScale > 1.3) energyState = 'charged';
-    else if(energyState === 'charged' && smoothScale > 1.8) energyState = 'overcharged';
-    else if(energyState === 'overcharged' && smoothScale > 2.2) energyState = 'critical';
-    
-    if(energyState === 'critical'){
-      coreStability -= 0.15;
-      if(coreStability <= 0){
-        energyState = 'exploding';
-        explosionTimer = 0;
-      }
-    }
-    if(energyState !== 'critical' && coreStability < 100) coreStability = Math.min(100, coreStability + 0.3);
-    if(smoothScale < 1.2 && energyState !== 'normal' && energyState !== 'exploding' && energyState !== 'reconstructing'){
-      energyState = 'normal';
-    }
-
-    // Explosion sequence
-    if(energyState === 'exploding'){
-      explosionTimer += 0.016;
-      if(explosionTimer > 2.5){
-        energyState = 'reconstructing';
-        reconstructionTimer = 0;
-      }
-    }
-    // Reconstruction sequence
-    if(energyState === 'reconstructing'){
-      reconstructionTimer += 0.016;
-      if(reconstructionTimer > 3){
-        energyState = 'normal';
-        coreStability = 100;
-        smoothScale = 1;
-      }
-    }
-
-    const stateColors = {
-      normal:    { r:255, g:59,  b:26,  haze:[255,59,26],  arc:[180,200,255] },
-      charged:   { r:255, g:120, b:40,  haze:[255,120,40], arc:[200,220,255] },
-      overcharged:{r:255, g:200, b:60, haze:[255,200,60], arc:[220,240,255] },
-      critical:  { r:255, g:40,  b:80,  haze:[255,40,80],  arc:[255,180,200] },
-    };
-    const sc = energyState === 'exploding' || energyState === 'reconstructing'
-      ? stateColors.critical : stateColors[energyState] || stateColors.normal;
-
-    // Shake
-    if(energyState === 'critical' || energyState === 'exploding'){
-      shakeIntensity = energyState === 'exploding' ? 8 : Math.min(6, (2.5 - smoothScale) * 5);
-    } else {
-      shakeIntensity *= 0.9;
-    }
-    const shX = shakeIntensity > 0.5 ? (Math.random()-0.5)*shakeIntensity : 0;
-    const shY = shakeIntensity > 0.5 ? (Math.random()-0.5)*shakeIntensity : 0;
-
-    let tx = 0, ty = 0, ts = 1;
-    if(handPositions.length > 0){
-      const hx = (handPositions[0].x - 0.5) * 24;
-      const hy = (handPositions[0].y - 0.5) * 24;
-      tx = hx;
-      ty = hy;
-    }
-    if(handPositions.length >= 2){
-      const dist = Math.hypot(
-        handPositions[0].x - handPositions[1].x,
-        handPositions[0].y - handPositions[1].y
-      );
-      ts = 1 + (dist - 0.4) * 3;
-      ts = Math.max(0.8, Math.min(2.5, ts));
-    }
-
-    smoothOfx += (tx - smoothOfx) * SMOOTH_IDLE;
-    smoothOfy += (ty - smoothOfy) * SMOOTH_IDLE;
-    smoothScale += (ts - smoothScale) * SMOOTH_SCALE;
-
-    // Orb position with shake and rotation offset
-    const wobX = Math.sin(t*0.7)*2;
-    const wobY = Math.cos(t*0.5)*2;
-    const cx = w/2 + smoothOfx + shX + wobX, cy = h/2 + smoothOfy + shY + wobY;
-    const scale = Math.min(w,h)/400;
-    const coreR = 150 * scale * smoothScale;
-
-    const isThinking = stateName === 'thinking';
-    const isSpeaking = stateName === 'speaking';
-    const isError = stateName === 'error';
-    const stateBoost = isError ? 1.8 : (isSpeaking || stateName === 'listening') ? 1.3 : isThinking ? 2.2 : 1;
-    const scaleGlow = Math.max(0, (smoothScale - 1) * 0.3);
-    const handGlow = 0.08 + Math.sin(t*1.7)*0.04
-      + (handDetected ? 0.12 + Math.sin(t*2)*0.06 : 0)
-      + scaleGlow
-      + (energyState === 'critical' ? 0.4 : 0) + (energyState === 'overcharged' ? 0.2 : 0);
-    const pulse = 1 + Math.sin(t*1.3*stateBoost)*0.02*stateBoost + audioAmp*0.08 + handGlow*0.04;
-    const flicker = 0.7 + Math.sin(t*4.1*stateBoost)*0.1 + Math.sin(t*11*stateBoost)*0.06 + audioAmp*0.3 + handGlow*0.4;
-
-    // outer heat haze — state-colored
-    let st = energyState === 'exploding' ? 0.35 : energyState === 'critical' ? 0.3 : energyState === 'overcharged' ? 0.25 : 0.18;
-    let hazeAlpha = (0.12 + Math.sin(t*2.3)*0.04) * (1 + (smoothScale-1)*0.5);
-    if(isThinking) hazeAlpha = Math.max(hazeAlpha, 0.18 + Math.sin(t*2.5)*0.06);
-    else if(isSpeaking) hazeAlpha = Math.max(hazeAlpha, 0.14 + Math.sin(t*1.8)*0.04);
-    hazeAlpha = Math.min(0.5, hazeAlpha);
-    let hazeGrad = ctx.createRadialGradient(cx,cy,coreR*0.1,cx,cy,coreR*1.8);
-    hazeGrad.addColorStop(0, `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${hazeAlpha})`);
-    hazeGrad.addColorStop(0.6, `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${hazeAlpha*0.4})`);
-    hazeGrad.addColorStop(1, `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},0)`);
-    ctx.fillStyle = hazeGrad;
-    ctx.beginPath();
-    ctx.arc(cx,cy,coreR*1.8*pulse,0,Math.PI*2);
-    ctx.fill();
-
-    // plasma core — multiple rotating layers
-    for(let li=0; li<plasmaLayers.length; li++){
-      const pl = plasmaLayers[li];
-      pl.angle += pl.speed * 0.02 * (energyState === 'exploding' ? 4 : energyState === 'critical' ? 2 : 1);
-      const pr = coreR * pl.radius * pulse;
-      const px = cx + Math.cos(pl.angle) * pr * 0.15;
-      const py = cy + Math.sin(pl.angle) * pr * 0.15;
-      const intensity = (energyState === 'exploding' ? 1 : energyState === 'critical' ? 0.9 : 0.7 + Math.sin(t*2+li)*0.15);
-      const pa = 0.15 * intensity * (1 + (smoothScale-1)*0.3);
-      const pg = ctx.createRadialGradient(px, py, 0, px, py, pr);
-      pg.addColorStop(0, `rgba(${sc.r*0.6+100},${sc.g*0.6},${sc.b*0.6},${pa*1.5})`);
-      pg.addColorStop(0.5, `rgba(${sc.r*0.8},${sc.g*0.8},${sc.b*0.5},${pa*0.8})`);
-      pg.addColorStop(1, `rgba(${sc.r*0.3},${sc.g*0.3},${sc.b*0.3},0)`);
-      ctx.fillStyle = pg;
-      ctx.beginPath();
-      ctx.arc(cx, cy, pr, 0, Math.PI*2);
-      ctx.fill();
-    }
-
-    // dark shell overlay with state border
-    let shellGrad = ctx.createRadialGradient(cx-coreR*0.3, cy-coreR*0.3, coreR*0.1, cx, cy, coreR);
-    const shellBase = isThinking ? '#4a2214' : '#3a1c14';
-    shellGrad.addColorStop(0, shellBase);
-    shellGrad.addColorStop(0.55, '#1c0f0b');
-    shellGrad.addColorStop(1, '#0a0605');
-    ctx.fillStyle = shellGrad;
-    ctx.beginPath();
-    ctx.arc(cx,cy,coreR*pulse,0,Math.PI*2);
-    ctx.fill();
-
-    // energy state ring
-    {
-      const ringAlpha = isThinking
-        ? 0.08 + Math.sin(t*2.8)*0.05
-        : 0.04 + Math.sin(t*2.2)*0.03;
-      const stateRingBoost = energyState === 'critical' ? 0.3 : energyState === 'overcharged' ? 0.15 : 0;
-      ctx.beginPath();
-      ctx.arc(cx,cy,coreR*(1.08 + Math.sin(t*3.2)*0.04 + (smoothScale-1)*0.06),0,Math.PI*2);
-      ctx.strokeStyle = `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${ringAlpha + stateRingBoost})`;
-      ctx.lineWidth = 2*scale;
-      ctx.setLineDash([4*scale, 6*scale]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // plating seams
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx,cy,coreR*pulse,0,Math.PI*2);
-    ctx.clip();
-    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-    ctx.lineWidth = 1;
-    for(let i=0;i<6;i++){
-      const a = (i/6)*Math.PI*2;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(a)*coreR*1.4, cy + Math.sin(a)*coreR*1.4);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // glowing fissures
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx,cy,coreR*pulse,0,Math.PI*2);
-    ctx.clip();
-
-    const offX = cx - cx0*scale;
-    const offY = cy - cy0*scale;
-
-    FISSURES.forEach((f, idx)=>{
-      const localFlicker = flicker * (0.7 + 0.3*Math.sin(t*2 + idx*1.7));
-      const alpha = Math.max(0.35, Math.min(1, localFlicker));
-      const mainPts = f.main.map(p => ({ x: p.x*scale+offX, y: p.y*scale+offY }));
-      drawPolyline(mainPts, '255,90,30', 2.2*scale, alpha, 10*scale*alpha);
-      drawPolyline(mainPts, '255,200,120', 0.9*scale, alpha*0.9, 4*scale);
-      f.branches.forEach(b=>{
-        const bp = b.map(p => ({ x: p.x*scale+offX, y: p.y*scale+offY }));
-        drawPolyline(bp, '255,90,30', 1.3*scale, alpha*0.75, 6*scale*alpha);
-      });
-    });
-    ctx.restore();
-
-    // dynamic electrical arcs with state color
-    {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx,cy,coreR*pulse,0,Math.PI*2);
-      ctx.clip();
-      const arcBoost = (isThinking ? 1 : 0.35) * (0.5 + 0.5 * smoothScale) * (energyState === 'critical' ? 2 : energyState === 'overcharged' ? 1.5 : 1);
-      ARCS.forEach((pts, idx) => {
-        const a = (0.25 + 0.2*Math.sin(t*4 + idx*1.7)) * (0.6 + 0.4*Math.sin(t*2.3 + idx)) * arcBoost;
-        if(a < 0.05) return;
-        const mapped = pts.map(p => ({x: p.x*scale + offX + (Math.random()-0.5)*2*scale, y: p.y*scale + offY + (Math.random()-0.5)*2*scale}));
-        ctx.beginPath();
-        ctx.moveTo(mapped[0].x, mapped[0].y);
-        for(let i = 1; i < mapped.length; i++){
-          const cx2 = (mapped[i-1].x + mapped[i].x)/2 + Math.sin(t*5 + i + idx)*5*scale;
-          const cy2 = (mapped[i-1].y + mapped[i].y)/2 + Math.cos(t*5 + i + idx)*5*scale;
-          ctx.quadraticCurveTo(cx2, cy2, mapped[i].x, mapped[i].y);
+        function escHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
-        const arcA = Math.max(0, Math.min(0.6, a));
-        ctx.strokeStyle = `rgba(${sc.arc[0]},${sc.arc[1]},${sc.arc[2]},${arcA})`;
-        ctx.lineWidth = (1.5 + Math.sin(t*3 + idx)*0.5 + (energyState==='critical'?1:0)) * scale;
-        ctx.shadowColor = `rgba(${sc.arc[0]},${sc.arc[1]},${sc.arc[2]},${arcA*0.6})`;
-        ctx.shadowBlur = (15 + (energyState==='critical'?20:0))*scale*arcA;
-        ctx.stroke();
-        ctx.strokeStyle = `rgba(255,255,255,${arcA*0.3})`;
-        ctx.lineWidth = 0.5*scale;
-        ctx.shadowBlur = 0;
-        ctx.stroke();
-      });
-      ctx.shadowBlur = 0;
-      ctx.restore();
-    }
 
-    // rim light — state-colored
-    ctx.beginPath();
-    ctx.arc(cx,cy,coreR*pulse,0,Math.PI*2);
-    const rimIntensity = 0.35 + (energyState==='critical'?0.4:0) + (energyState==='overcharged'?0.2:0) + audioAmp*0.3;
-    ctx.strokeStyle = `rgba(${sc.r},${sc.g},${sc.b},${Math.min(1, rimIntensity)})`;
-    ctx.lineWidth = 1.5*scale;
-    ctx.shadowColor = `rgba(${sc.r},${sc.g},${sc.b},0.6)`;
-    ctx.shadowBlur = (14 + (energyState==='critical'?20:0))*scale;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+        let currentConvId = null;
+        let micActive = false;
+        let speechRec = null;
+        let audioContext = null;
+        let analyser = null;
+        let dataArray = null;
+        let isSpeaking = false;
+        let sysState = 'idle'; // idle, thinking, listening, speaking, error
 
-    // explosion particles
-    if(energyState === 'exploding'){
-      const explosionProgress = explosionTimer / 2.5;
-      const numParticles = 120;
-      for(let i=0;i<numParticles;i++){
-        const ang = (i/numParticles)*Math.PI*2 + explosionTimer*2;
-        const dist = explosionProgress * (80 + Math.random()*120) * scale * smoothScale;
-        const px = cx + Math.cos(ang) * dist;
-        const py = cy + Math.sin(ang) * dist;
-        const size = (1.5 + Math.random()*3) * scale * (1 - explosionProgress);
-        const pa = Math.max(0, 1 - explosionProgress * 1.2);
-        ctx.beginPath();
-        ctx.arc(px, py, size, 0, Math.PI*2);
-        ctx.fillStyle = `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${pa*0.8})`;
-        ctx.shadowColor = `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${pa*0.5})`;
-        ctx.shadowBlur = 15*scale*pa;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      }
-    }
-
-    // reconstruction particles
-    if(energyState === 'reconstructing'){
-      const recProgress = Math.min(1, reconstructionTimer / 3);
-      const numParticles = 80;
-      for(let i=0;i<numParticles;i++){
-        const ang = (i/numParticles)*Math.PI*2 + reconstructionTimer*1.5;
-        const baseDist = (200 + Math.random()*100) * scale;
-        const dist = baseDist * (1 - recProgress * 0.9);
-        const px = cx + Math.cos(ang) * dist;
-        const py = cy + Math.sin(ang) * dist;
-        const size = (1 + Math.random()*2) * scale * (0.3 + recProgress * 0.7);
-        const pa = Math.min(0.8, recProgress * 2);
-        ctx.beginPath();
-        ctx.arc(px, py, size * (1 - recProgress * 0.3), 0, Math.PI*2);
-        ctx.fillStyle = `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${pa*0.6})`;
-        ctx.shadowColor = `rgba(${sc.haze[0]},${sc.haze[1]},${sc.haze[2]},${pa*0.3})`;
-        ctx.shadowBlur = 10*scale*pa;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      }
-    }
-
-    // hand-reactive energy tendrils
-    if(handPositions.length > 0){
-      const tAlpha = 0.15 + Math.min(0.3, (smoothScale - 1) * 0.2);
-      const tBlur = (12 + Math.min(20, (smoothScale - 1) * 16)) * scale;
-      handPositions.forEach(hp => {
-        const tx = (hp.x - 0.5) * 100;
-        const ty = (hp.y - 0.5) * 100;
-        const a = Math.atan2(ty - smoothOfy, tx - smoothOfx);
-        const reach = Math.min(80, Math.hypot(tx - smoothOfy, ty - smoothOfx) * 0.70);
-        const r0 = coreR * 1.02;
-        const sx = cx + Math.cos(a) * r0;
-        const sy = cy + Math.sin(a) * r0;
-        const ex = sx + Math.cos(a) * reach + (Math.random() - 0.5) * 6;
-        const ey = sy + Math.sin(a) * reach + (Math.random() - 0.5) * 6;
-        const pts = [];
-        const segs = 6;
-        for(let i=0;i<=segs;i++){
-          const f = i/segs;
-          const wave = Math.sin(t*4 + i*1.7 + f*5) * 4 * scale;
-          pts.push({
-            x: sx + (ex-sx)*f + wave * Math.cos(a + 1.5),
-            y: sy + (ey-sy)*f + wave * Math.sin(a + 1.5)
-          });
+        async function apiGet(path) {
+            try {
+                const res = await fetch(path);
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                return await res.json();
+            } catch (e) {
+                console.error("API GET Error:", e);
+                return null;
+            }
         }
-        drawPolyline(pts, '180,210,255', 1.2*scale, tAlpha, tBlur);
-        drawPolyline(pts, '255,255,255', 0.5*scale, tAlpha*0.4, 0);
-      });
-    }
 
-    // glow ring
-    {
-      const sg = Math.min(0.3, (smoothScale - 1) * 0.15);
-      const hg = handDetected
-        ? 0.15 + Math.sin(t*2.5)*0.08 + sg
-        : 0.06 + Math.sin(t*2)*0.03;
-      ctx.beginPath();
-      const ringR = coreR * (handDetected ? 1.04 + Math.sin(t*1.8)*0.025 : 1.03 + Math.sin(t*1.5)*0.015);
-      ctx.arc(cx,cy,ringR,0,Math.PI*2);
-      const stateColor = energyState === 'critical' || energyState === 'exploding' ? `${sc.haze[0]},${sc.haze[1]},${sc.haze[2]}` : '255,176,32';
-      ctx.strokeStyle = `rgba(${stateColor},${hg})`;
-      ctx.lineWidth = (handDetected ? 2 : 1.2) * scale;
-      ctx.shadowColor = `rgba(255,176,32,${hg*0.6})`;
-      ctx.shadowBlur = (handDetected ? 20 : 10) * scale;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
+        async function apiPost(path, body) {
+            try {
+                const res = await fetch(path, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                return await res.json();
+            } catch (e) {
+                console.error("API POST Error:", e);
+                return null;
+            }
+        }
 
-    // inner ember eye
-    let eyeGrad = ctx.createRadialGradient(cx,cy,0,cx,cy,coreR*0.3);
-    eyeGrad.addColorStop(0, `rgba(255,220,160,${0.9*flicker})`);
-    eyeGrad.addColorStop(0.5, `rgba(255,90,30,${0.6*flicker})`);
-    eyeGrad.addColorStop(1, 'rgba(255,59,26,0)');
-    ctx.fillStyle = eyeGrad;
-    ctx.beginPath();
-    ctx.arc(cx,cy,coreR*0.3,0,Math.PI*2);
-    ctx.fill();
+        // Conversations
+        async function fetchConvList() {
+            const list = await apiGet(CONV_API + '/');
+            if (list) populateArchive(list);
+        }
 
-    // hand-reactive particles
-    if(handDetected && handPositions.length > 0){
-      const hp = handPositions[0];
-      const absPx = cx + (hp.x - 0.5) * 100;
-      const absPy = cy + (hp.y - 0.5) * 100;
-      if(prevHandPos){
-        const vx = absPx - prevHandPos.x;
-        const vy = absPy - prevHandPos.y;
-        const speed = Math.hypot(vx, vy);
-        if(speed > 0.5){
-          const n = Math.min(4, 1 + Math.floor(speed * 1.5));
-          for(let i=0;i<n;i++){
-            handParticles.push({
-              x: absPx + (Math.random() - 0.5) * 8,
-              y: absPy + (Math.random() - 0.5) * 8,
-              vx: -vx * 0.15 + (Math.random() - 0.5) * 1.5,
-              vy: -vy * 0.15 + (Math.random() - 0.5) * 1.5,
-              life: 0.7 + Math.random() * 0.6,
-              size: 1.5 + Math.random() * 3
+        async function fetchConv(id) {
+            const conv = await apiGet(`${CONV_API}/${id}`);
+            if (conv) {
+                currentConvId = id;
+                document.getElementById('chat-area').innerHTML = '';
+                conv.messages.forEach(m => appendMessage(m.role, m.content));
+            }
+        }
+
+        async function saveConv(conv) {
+            await apiPost(CONV_API + '/', conv);
+            fetchConvList();
+        }
+
+        window.newConversation = () => {
+            currentConvId = null;
+            document.getElementById('chat-area').innerHTML = '';
+            appendMessage('system', 'New session initialized.');
+        };
+
+        window.switchConv = (id) => {
+            fetchConv(id);
+        };
+
+        function populateArchive(list) {
+            const container = document.getElementById('conv-list');
+            container.innerHTML = '';
+            list.forEach(c => {
+                const btn = document.createElement('button');
+                btn.textContent = c.title || c.id.substring(0, 8);
+                btn.style.width = '100%';
+                btn.style.textAlign = 'left';
+                btn.onclick = () => switchConv(c.id);
+                container.appendChild(btn);
             });
-          }
         }
-      }
-      prevHandPos = { x: absPx, y: absPy };
-    } else {
-      prevHandPos = null;
-    }
 
-    for(let i=handParticles.length-1;i>=0;i--){
-      const p = handParticles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vx *= 0.96;
-      p.vy *= 0.96;
-      p.life -= 0.025;
-      if(p.life <= 0){
-        handParticles.splice(i, 1);
-        continue;
-      }
-      const pa = Math.min(1, p.life * 1.5);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * scale * pa, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255,${180 + Math.floor(50 * pa)},${60 + Math.floor(80 * pa)},${pa * 0.55})`;
-      ctx.shadowColor = `rgba(255,200,100,${pa * 0.35})`;
-      ctx.shadowBlur = 8 * scale * pa;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
-    if(handParticles.length > MAX_PARTICLES){
-      handParticles.splice(0, handParticles.length - MAX_PARTICLES);
-    }
-
-    requestAnimationFrame(draw);
-    }catch(e){
-      console.warn('[DRAW] Error:', e);
-      requestAnimationFrame(draw);
-    }
-  }
-  requestAnimationFrame(draw);
-
-  /* ─── Ambient dread ─── */
-  const heartbeatEl = document.getElementById('heartbeat');
-  const glitchBandsEl = document.getElementById('glitchBands');
-  const flashRedEl = document.getElementById('flashRed');
-  const stageEl = document.getElementById('stage');
-  const logoEl = document.querySelector('.logo');
-
-  function heartbeatLoop(){
-    const beat = Math.max(0, Math.sin(t*1.3)) * 0.5 + audioAmp*0.4;
-    heartbeatEl.style.opacity = beat.toFixed(2);
-    requestAnimationFrame(heartbeatLoop);
-  }
-  requestAnimationFrame(heartbeatLoop);
-
-  function triggerGlitch(intensity){
-    glitchBandsEl.classList.remove('on'); void glitchBandsEl.offsetWidth;
-    glitchBandsEl.classList.add('on');
-    logoEl.classList.remove('glitching'); void logoEl.offsetWidth;
-    logoEl.classList.add('glitching');
-    if(intensity === 'hard'){
-      stageEl.classList.remove('shake'); void stageEl.offsetWidth;
-      stageEl.classList.add('shake');
-      flashRedEl.classList.remove('hit'); void flashRedEl.offsetWidth;
-      flashRedEl.classList.add('hit');
-    }
-  }
-
-  function scheduleAmbientGlitch(){
-    const delay = 3200 + Math.random()*5200;
-    setTimeout(()=>{
-      triggerGlitch(Math.random() > 0.82 ? 'hard' : 'soft');
-      scheduleAmbientGlitch();
-    }, delay);
-  }
-  scheduleAmbientGlitch();
-
-  /* ─── Panels ─── */
-  const panels = {
-    diagnostics: document.getElementById('panelDiag'),
-    network: document.getElementById('panelNet')
-  };
-  const hideTimers = {};
-
-  function showPanel(name, opts){
-    opts = opts || {};
-    const el = panels[name];
-    if(!el) return;
-    el.classList.add('visible');
-    if(hideTimers[name]) clearTimeout(hideTimers[name]);
-    if(opts.autoHide !== false){
-      hideTimers[name] = setTimeout(()=>hidePanel(name), opts.duration || 5200);
-    }
-  }
-  function hidePanel(name){
-    const el = panels[name];
-    if(!el) return;
-    el.classList.remove('visible');
-    if(name === 'diagnostics') stopDiagnostics();
-  }
-
-  function showNetwork(text, duration){
-    document.getElementById('netText').textContent = text;
-    showPanel('network', { duration: duration || 3200 });
-  }
-
-  /* ─── Conversation persistence ─── */
-  let conversations = [];
-  let activeId = null;
-  let currentMessages = [];
-
-  function uid(){ return crypto.randomUUID?.() || (Date.now().toString(36)+Math.random().toString(36).slice(2,8)); }
-
-  async function apiGet(path){ const r=await fetch(path); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-  async function apiPost(path,body){ const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-
-  async function fetchConvList(){ return apiGet(CONV_API+'/'); }
-  async function fetchConv(id){ return apiGet(CONV_API+'/'+encodeURIComponent(id)); }
-  async function saveConv(conv){ return apiPost(CONV_API+'/', conv); }
-
-  function loadActiveId(){ return localStorage.getItem(ACTIVE_KEY)||null; }
-  function saveActiveId(id){ if(id)localStorage.setItem(ACTIVE_KEY,id); else localStorage.removeItem(ACTIVE_KEY); }
-  function getActiveConv(){ return conversations.find(c=>c.id===activeId); }
-
-  function genTitle(msgs){
-    const first=msgs.find(m=>m.role==='user');
-    if(!first)return 'New Session';
-    let t=first.text.trim();
-    if(t.length>35)t=t.slice(0,35)+'…';
-    return t;
-  }
-
-  function populateArchive(){
-    const body = document.getElementById('archiveBody');
-    body.innerHTML = '';
-    if(!conversations.length){
-      body.innerHTML = '<div style="text-align:center;padding:20px 0;color:rgba(245,237,230,0.3);font-size:10.5px">No saved sessions</div>';
-      return;
-    }
-    for(const c of conversations){
-      const row = document.createElement('div');
-      row.className = 'file-row';
-      if(c.id === activeId) row.style.color = 'var(--ember)';
-      const dateStr = c.updatedAt ? new Date(c.updatedAt).toLocaleDateString(undefined,{month:'short',day:'numeric'}) : '';
-      row.innerHTML = `<span class="fname">${escHtml(c.title||'New Session')}</span><span class="fmeta">${dateStr}</span>`;
-      row.addEventListener('click', ()=>switchConv(c.id));
-      body.appendChild(row);
-    }
-  }
-
-  function escHtml(s){
-    const d=document.createElement('div');
-    d.textContent=s;
-    return d.innerHTML;
-  }
-
-  async function switchConv(id){
-    try{
-      const data = await fetchConv(id);
-      currentMessages = data.messages || [];
-      const idx = conversations.findIndex(c=>c.id===id);
-      if(idx>=0) conversations[idx] = data;
-      else conversations.unshift(data);
-      activeId = id;
-      localStorage.setItem(ACTIVE_KEY, id);
-      populateArchive();
-      clearChatMessages();
-      for(const m of currentMessages){
-        addChatMessage(m.role === 'user' ? 'user' : 'ai', m.text);
-      }
-      showNetwork('SESSION RESTORED — ' + (data.title||'untitled').toUpperCase());
-    }catch(e){
-      showNetwork('FAILED TO LOAD SESSION');
-    }
-  }
-
-  async function newConversation(){
-    const conv = {
-      id: uid(),
-      title: 'New Session',
-      messages: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    try{
-      await saveConv(conv);
-      conversations.unshift(conv);
-      activeId = conv.id;
-      saveActiveId(conv.id);
-      currentMessages = [];
-      clearChatMessages();
-      populateArchive();
-      showNetwork('NEW SESSION INITIALIZED');
-    }catch(e){
-      showNetwork('FAILED TO CREATE SESSION');
-    }
-  }
-
-  /* ─── Core diagnostics (live) ─── */
-  let diagInterval = null;
-
-  function formatBytes(b){
-    if(b == null) return 'N/A';
-    if(b === 0) return '0 B';
-    const u = ['B','KB','MB','GB','TB'];
-    const i = Math.floor(Math.log(b) / Math.log(1024));
-    return (b / Math.pow(1024, i)).toFixed(1) + ' ' + u[i];
-  }
-
-  function formatBps(v){
-    if(v == null) return 'N/A';
-    return formatBytes(v) + '/s';
-  }
-
-  async function fetchSystemStats(){
-    const panelHead = document.querySelector('#panelDiag .panel-head span:first-child');
-    try{
-      const res = await fetch('/api/v1/system/stats');
-      if(!res.ok){
-        if(panelHead) panelHead.textContent = 'CORE INTEGRITY — OFFLINE';
-        return;
-      }
-      const d = await res.json();
-      if(panelHead) panelHead.textContent = 'CORE INTEGRITY — LIVE';
-
-      document.getElementById('cpuFill').style.width = d.cpu.percent + '%';
-      document.getElementById('cpuVal').textContent = d.cpu.percent + '%';
-      document.getElementById('cpuTemp').textContent = d.cpu.temp != null ? d.cpu.temp + '°C' : 'N/A';
-
-      document.getElementById('memFill').style.width = d.ram.percent + '%';
-      document.getElementById('memVal').textContent = d.ram.percent + '%';
-      document.getElementById('ramUsed').textContent = formatBytes(d.ram.used);
-      document.getElementById('ramTotal').textContent = formatBytes(d.ram.total);
-
-      const g = d.gpu;
-      if(g.util != null){
-        document.getElementById('gpuFill').style.width = g.util + '%';
-        document.getElementById('gpuVal').textContent = g.util + '%';
-      } else {
-        document.getElementById('gpuFill').style.width = '0%';
-        document.getElementById('gpuVal').textContent = 'N/A';
-      }
-      document.getElementById('vramUsed').textContent = g.vram_used != null ? formatBytes(g.vram_used * 1024 * 1024) : 'N/A';
-      document.getElementById('vramTotal').textContent = g.vram_total != null ? formatBytes(g.vram_total * 1024 * 1024) : 'N/A';
-      document.getElementById('gpuTemp').textContent = g.temp != null ? g.temp + '°C' : 'N/A';
-
-      document.getElementById('diskFill').style.width = d.disk.percent + '%';
-      document.getElementById('diskVal').textContent = d.disk.percent + '%';
-      document.getElementById('diskUsed').textContent = formatBytes(d.disk.used);
-      document.getElementById('diskTotal').textContent = formatBytes(d.disk.total);
-
-      const b = d.battery;
-      if(b.percent != null){
-        document.getElementById('batVal').textContent = b.percent + '%';
-        document.getElementById('batStatus').textContent = b.charging ? 'Charging' : 'Discharging';
-      } else {
-        document.getElementById('batVal').textContent = 'N/A';
-        document.getElementById('batStatus').textContent = 'No battery detected';
-      }
-
-      document.getElementById('netDown').textContent = formatBps(d.network.download_bps);
-      document.getElementById('netUp').textContent = formatBps(d.network.upload_bps);
-
-    }catch(e){
-      if(panelHead) panelHead.textContent = 'CORE INTEGRITY — ERROR';
-    }
-  }
-
-  function startDiagnostics(){
-    fetchSystemStats();
-    diagInterval = setInterval(fetchSystemStats, 1000);
-  }
-  function stopDiagnostics(){
-    if(diagInterval){ clearInterval(diagInterval); diagInterval=null; }
-    const panelHead = document.querySelector('#panelDiag .panel-head span:first-child');
-    if(panelHead) panelHead.textContent = 'CORE INTEGRITY';
-  }
-
-  /* ─── Response line ─── */
-  const responseLine = document.getElementById('responseLine');
-  let respTimer = null;
-  /* ─── Dock ─── */
-  const leftDock = document.getElementById('leftDock');
-  const dockToggleBtn = document.getElementById('dockToggleBtn');
-  const dockTabs = document.querySelectorAll('.dock-tab');
-  const dockBodies = {
-    thread: document.getElementById('dockThread'),
-    sessions: document.getElementById('dockSessions')
-  };
-
-  dockToggleBtn.addEventListener('click', ()=>{
-    const wasOpen = leftDock.classList.contains('open');
-    leftDock.classList.toggle('open');
-    dockToggleBtn.classList.toggle('closed', wasOpen);
-    dockToggleBtn.textContent = wasOpen ? '◀' : '▶';
-  });
-
-  dockTabs.forEach(tab => {
-    tab.addEventListener('click', ()=>{
-      const name = tab.getAttribute('data-docktab');
-      dockTabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      Object.keys(dockBodies).forEach(k => {
-        dockBodies[k].classList.toggle('active', k === name);
-      });
-    });
-  });
-
-  /* ─── Chat Panel ─── */
-  const chatBody = document.getElementById('chatBody');
-
-  function renderMarkdown(text){
-    let h = escHtml(text);
-    h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-      return `<pre><code>${escHtml(code.trim())}</code></pre>`;
-    });
-    h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
-    h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
-    h = h.replace(/\*(.+?)\*/g, '<i>$1</i>');
-    h = h.replace(/^### (.+)$/gm, '<b style="font-size:13px;color:var(--ember-dim)">$1</b>');
-    h = h.replace(/^## (.+)$/gm, '<b style="font-size:14px;color:var(--ember)">$1</b>');
-    h = h.replace(/^# (.+)$/gm, '<b style="font-size:15px;color:var(--ember)">$1</b>');
-    h = h.replace(/- (.+)/g, '• $1');
-    h = h.replace(/\n\n/g, '</p><p>');
-    h = h.replace(/\n/g, '<br>');
-    return '<p>' + h + '</p>';
-  }
-
-  function addChatMessage(role, text, append){
-    if(!leftDock.classList.contains('open')){ leftDock.classList.add('open'); dockToggleBtn.classList.remove('closed'); dockToggleBtn.textContent = '▶'; }
-    // Switch to THREAD tab if SESSIONS is active
-    const threadTab = document.querySelector('.dock-tab[data-docktab="thread"]');
-    if(threadTab && !threadTab.classList.contains('active')) threadTab.click();
-    const msgs = chatBody.querySelectorAll('.chat-msg');
-    const last = msgs[msgs.length - 1];
-    if(append && last && last.classList.contains(role)){
-      const bubble = last.querySelector('.bubble');
-      bubble.innerHTML = renderMarkdown(last._fullText + text);
-      last._fullText += text;
-    } else {
-      const div = document.createElement('div');
-      div.className = 'chat-msg ' + role;
-      div.innerHTML = `<div class="sender">${role === 'user' ? 'OPERATOR' : '▸ FALSO'}</div><div class="bubble"></div>`;
-      div._fullText = text || '';
-      div.querySelector('.bubble').innerHTML = renderMarkdown(text || '');
-      chatBody.appendChild(div);
-    }
-    chatBody.scrollTop = chatBody.scrollHeight;
-  }
-
-  function clearChatMessages(){
-    chatBody.innerHTML = '';
-  }
-
-  let accumulatedResponse = '';
-
-  /* ─── FALSO Voice Engine ─── */
-  const FalsoVoice = {
-    ctx: null,
-    isSpeaking: false,
-    utt: null,
-    drone: null,
-    droneGain: null,
-    metal: null,
-    metalGain: null,
-    sub: null,
-    subGain: null,
-    reverbMix: null,
-    convolver: null,
-    compressor: null,
-    voiceSelected: false,
-
-    init(){
-      this.ctx = getAudioCtx();
-      this.compressor = this.ctx.createDynamicsCompressor();
-      this.compressor.threshold.value = -24;
-      this.compressor.knee.value = 12;
-      this.compressor.ratio.value = 6;
-      this.compressor.attack.value = 0.008;
-      this.compressor.release.value = 0.15;
-      this.compressor.connect(this.ctx.destination);
-
-      // Generate impulse response for reverb
-      const sr = this.ctx.sampleRate;
-      const len = sr * 1.8;
-      const impulse = this.ctx.createBuffer(2, len, sr);
-      for(let ch=0;ch<2;ch++){
-        const data = impulse.getChannelData(ch);
-        for(let i=0;i<len;i++){
-          const n = (Math.random()*2-1);
-          const env = Math.pow(1 - i/len, 2.5);
-          data[i] = n * env * (ch===0 ? 0.7 : 0.5);
-        }
-      }
-      this.convolver = this.ctx.createConvolver();
-      this.convolver.buffer = impulse;
-      this.reverbMix = this.ctx.createGain();
-      this.reverbMix.gain.value = 0.35;
-    },
-
-    selectVoice(){
-      if(this.voiceSelected) return;
-      const voices = speechSynthesis.getVoices();
-      let best = null;
-      for(const v of voices){
-        if(v.lang.startsWith('en') && v.name.toLowerCase().includes('male')){ best = v; break; }
-      }
-      if(!best && voices.length){
-        best = voices.reduce((a,b)=> a.name.length < b.name.length ? a : b);
-      }
-      window.falsoVoiceObj = best;
-      this.voiceSelected = true;
-    },
-
-    speak(text){
-      if(!text) return;
-      if(!this.ctx) this.init();
-
-      this.stop();
-      this.isSpeaking = true;
-      const ctx = this.ctx;
-
-      // Pre-speak pause
-      ctx.suspend().then(()=>{ setTimeout(()=> ctx.resume(), 180); });
-
-      // Build the voice chain
-      this.droneGain = ctx.createGain();
-      this.droneGain.gain.setValueAtTime(0, ctx.currentTime + 0.2);
-      this.droneGain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.6);
-
-      this.drone = ctx.createOscillator();
-      this.drone.type = 'sine';
-      this.drone.frequency.value = 55;
-      this.drone.frequency.linearRampToValueAtTime(58 + Math.sin(text.length)*2, ctx.currentTime + 1.5);
-      this.drone.connect(this.droneGain);
-      this.droneGain.connect(this.convolver);
-      this.convolver.connect(this.reverbMix);
-      this.reverbMix.connect(this.compressor);
-
-      // Sub-harmonic (very deep, felt not heard)
-      this.subGain = ctx.createGain();
-      this.subGain.gain.setValueAtTime(0, ctx.currentTime + 0.3);
-      this.subGain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.8);
-
-      this.sub = ctx.createOscillator();
-      this.sub.type = 'sine';
-      this.sub.frequency.value = 32;
-      this.sub.connect(this.subGain);
-      this.subGain.connect(this.compressor);
-
-      // Metallic resonance
-      this.metalGain = ctx.createGain();
-      this.metalGain.gain.setValueAtTime(0, ctx.currentTime + 0.4);
-      this.metalGain.gain.linearRampToValueAtTime(0.04, ctx.currentTime + 1);
-
-      const metalFilter = ctx.createBiquadFilter();
-      metalFilter.type = 'bandpass';
-      metalFilter.frequency.value = 440;
-      metalFilter.Q.value = 2.5;
-
-      this.metal = ctx.createOscillator();
-      this.metal.type = 'triangle';
-      this.metal.frequency.value = 110;
-      this.metal.connect(metalFilter);
-      metalFilter.connect(this.metalGain);
-      this.metalGain.connect(this.reverbMix);
-
-      // SpeechSynthesis (spoken human voice output)
-      // Note: Metallic drone oscillators are disabled so user hears clean speech instead of tone hum
-      /*
-      this.drone.start(ctx.currentTime + 0.2);
-      this.sub.start(ctx.currentTime + 0.3);
-      this.metal.start(ctx.currentTime + 0.4);
-      */
-
-      // SpeechSynthesis
-      this.selectVoice();
-      try{
-        speechSynthesis.cancel();
-        this.utt = new SpeechSynthesisUtterance(text);
-        if(window.falsoVoiceObj) this.utt.voice = window.falsoVoiceObj;
-        this.utt.rate = 0.72;
-        this.utt.pitch = 0.35;
-        this.utt.volume = 1;
-
-        this.utt.onend = ()=>{
-          this.fadeOut(ctx);
-        };
-        this.utt.onerror = ()=>{
-          this.fadeOut(ctx);
-        };
-        speechSynthesis.speak(this.utt);
-      }catch(e){
-        this.fadeOut(ctx);
-      }
-    },
-
-    fadeOut(ctx){
-      const now = ctx.currentTime;
-      if(this.droneGain){
-        this.droneGain.gain.cancelScheduledValues(now);
-        this.droneGain.gain.setValueAtTime(this.droneGain.gain.value || 0, now);
-        this.droneGain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-      }
-      if(this.subGain){
-        this.subGain.gain.cancelScheduledValues(now);
-        this.subGain.gain.setValueAtTime(this.subGain.gain.value || 0, now);
-        this.subGain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
-      }
-      if(this.metalGain){
-        this.metalGain.gain.cancelScheduledValues(now);
-        this.metalGain.gain.setValueAtTime(this.metalGain.gain.value || 0, now);
-        this.metalGain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-      }
-      setTimeout(()=>{
-        this.stop();
-        this.isSpeaking = false;
-      }, 2000);
-    },
-
-    stop(){
-      try{
-        speechSynthesis.cancel();
-      }catch(_){}
-      if(this.drone){
-        try{ this.drone.stop(); }catch(_){}
-        this.drone = null;
-      }
-      if(this.sub){
-        try{ this.sub.stop(); }catch(_){}
-        this.sub = null;
-      }
-      if(this.metal){
-        try{ this.metal.stop(); }catch(_){}
-        this.metal = null;
-      }
-      this.utt = null;
-    }
-  };
-
-  // Pre-load voices
-  if('speechSynthesis' in window){
-    speechSynthesis.getVoices();
-    speechSynthesis.onvoiceschanged = ()=> FalsoVoice.selectVoice();
-  }
-
-  /* ─── Server TTS Integration & Audio Playback ─── */
-  let currentAudioSource = null;
-
-  function stopActiveAudioPlayback() {
-    if (currentAudioSource) {
-      try { currentAudioSource.pause(); currentAudioSource.currentTime = 0; } catch(e) {}
-      currentAudioSource = null;
-    }
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
-  }
-
-  async function playServerTTS(text) {
-    console.log('[TTS AUDIT Stage 1] Frontend calling POST /api/v1/voice/tts for text: ' + JSON.stringify(text.substring(0, 50)));
-    try {
-      const res = await fetch(API_BASE + '/voice/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text })
-      });
-      if (res.ok) {
-        const audioBlob = await res.blob();
-        console.log(`[TTS AUDIT Stage 7] Frontend received ${audioBlob.size} audio bytes from backend (type: ${audioBlob.type})`);
-        if (audioBlob.size === 0) {
-          console.warn('[TTS AUDIT Stage 7 Warning] Backend returned 0 audio bytes');
-          return false;
-        }
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        currentAudioSource = audio;
-        console.log('[TTS AUDIT Stage 8] Starting HTML5 Audio speaker playback...');
-        setState('speaking');
-        audio.onended = () => {
-          console.log('[TTS AUDIT Stage 8] Audio speaker playback finished cleanly');
-          setState('idle');
-          currentAudioSource = null;
-        };
-        audio.onerror = (e) => {
-          console.error('[TTS AUDIT Stage 8 Failure] HTML5 Audio element error ->', e);
-          setState('idle');
-          currentAudioSource = null;
-        };
-        await audio.play();
-        return true;
-      } else {
-        console.error(`[TTS AUDIT Stage 1 Failure] Backend /voice/tts returned HTTP status ${res.status}`);
-      }
-    } catch(e) {
-      console.warn('[TTS AUDIT Stage 1 Failure] Fetch /voice/tts network exception ->', e);
-    }
-    return false;
-  }
-
-  async function speak(text, holdMs){
-    responseLine.textContent = text;
-    responseLine.classList.add('show');
-    if(respTimer) clearTimeout(respTimer);
-    respTimer = setTimeout(()=>{ responseLine.classList.remove('show'); }, holdMs || 4400);
-
-    console.log('[VOICE PIPELINE] Stage 6: Gemini response received -> ' + JSON.stringify(text.substring(0, 80)));
-    stopActiveAudioPlayback();
-
-    const playedServer = await playServerTTS(text);
-    if (!playedServer) {
-      console.log('[VOICE PIPELINE] Stage 8: Audio playback -> starting speaker playback via Web Audio FalsoVoice');
-      if(!navigator.userAgent.includes('HeadlessChrome')){
-        FalsoVoice.speak(text);
-      }
-    }
-  }
-
-  function appendResponse(chunk){
-    accumulatedResponse += chunk;
-    responseLine.textContent = accumulatedResponse;
-    if(!responseLine.classList.contains('show')){
-      responseLine.classList.add('show');
-    }
-  }
-
-  function finalizeResponse(){
-    if(respTimer) clearTimeout(respTimer);
-  }
-
-  /* ─── Send to FALSO backend ─── */
-  const input = document.getElementById('cmdInput');
-  let isLoading = false;
-  let seqTimers = [];
-  function clearSeq(){ seqTimers.forEach(clearTimeout); seqTimers=[]; }
-  function after(ms, fn){ const id=setTimeout(fn, ms); seqTimers.push(id); return id; }
-
-  async function sendToFalso(text){
-    if(isLoading || !text) return;
-    isLoading = true;
-    clearSeq();
-
-    let conv = getActiveConv();
-    if(!conv){
-      await newConversation();
-      conv = getActiveConv();
-    }
-    if(!conv) return;
-
-    setState('thinking');
-
-    try{
-      const res = await fetch(API_BASE + '/chat', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ prompt: text })
-      });
-
-      if(!res.ok){
-        const err = await res.json().catch(()=>({detail:'Request failed'}));
-        speak('Error: ' + (err.detail||'Something went wrong'), 5000);
-        setState('error');
-        triggerGlitch('hard');
-        isLoading = false;
-        return;
-      }
-
-      const userMsg = { role:'user', text, time: new Date().toISOString() };
-      currentMessages.push(userMsg);
-      conv.messages = currentMessages;
-      addChatMessage('user', text);
-      if(conv.title === 'New Session') conv.title = genTitle(currentMessages);
-      conv.updatedAt = new Date().toISOString();
-
-      setState('listening');
-      accumulatedResponse = '';
-      let chatAppend = false;
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let hasError = false;
-      let responseText = '';
-
-      while(true){
-        const {done,value}=await reader.read();
-        if(done) break;
-        buffer += decoder.decode(value, {stream:true});
-        const lines = buffer.split('\n');
-        buffer = lines.pop()||'';
-        for(const line of lines){
-          if(!line.trim()) continue;
-          try{
-            const data = JSON.parse(line);
-            if(data.error){
-              responseText += 'Error: ' + data.error;
-              hasError = true;
-              continue;
+        // Chat Streaming
+        async function sendToFalso(text) {
+            appendMessage('user', text);
+            changeState('thinking');
+            
+            const chatArea = document.getElementById('chat-area');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message system';
+            chatArea.appendChild(msgDiv);
+            
+            let fullResponse = "";
+
+            try {
+                const res = await fetch(API_BASE + '/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: text })
+                });
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n').filter(l => l.trim() !== '');
+                    
+                    for (const line of lines) {
+                        try {
+                            const data = JSON.parse(line);
+                            if (data.type === 'tool_start') {
+                                const ti = document.getElementById('toolIndicator');
+                                if (ti) {
+                                    const toolName = escHtml((data.tool || '').replace(/_/g,' ').toUpperCase());
+                                    const act = escHtml((data.action || '').toUpperCase());
+                                    const detail = escHtml(data.detail || '');
+                                    ti.innerHTML = `<span class="spinner">◌</span> ${toolName} — ${act} ${detail ? '// '+detail : ''}`;
+                                    ti.classList.add('show');
+                                }
+                                continue;
+                            } else if (data.response) {
+                                fullResponse += data.response;
+                                msgDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
+                                changeState('speaking');
+                                chatArea.scrollTop = chatArea.scrollHeight;
+                            } else if (data.done) {
+                                const modelName = data.model || '';
+                                if (modelName) document.querySelector('.sysid').innerHTML = 'FALSO // ' + escHtml(modelName.toUpperCase().replace(':','')) + '<br>AI CORE ONLINE';
+                            } else if (data.error) {
+                                fullResponse += 'Error: ' + data.error;
+                                msgDiv.innerHTML += `<br><span style="color:#ff5533">Error: ${data.error}</span>`;
+                                changeState('error');
+                            }
+                        } catch(e) { console.error("Parse err", e, line); }
+                    }
+                }
+                
+                changeState('idle');
+                if (fullResponse) {
+                    speak(fullResponse);
+                }
+
+            } catch (err) {
+                console.error(err);
+                changeState('error');
             }
-            if(data.type === 'tool_start'){
-              const ti = document.getElementById('toolIndicator');
-              if(ti){
-                const toolName = escHtml((data.tool || '').replace(/_/g,' ').toUpperCase());
-                const act = escHtml((data.action || '').toUpperCase());
-                const detail = escHtml(data.detail || '');
-                ti.innerHTML = `<span class="spinner">◌</span> ${toolName} — ${act} ${detail ? '// '+detail : ''}`;
-                ti.classList.add('show');
-              }
-              continue;
+        }
+
+        function appendMessage(role, text) {
+            const chatArea = document.getElementById('chat-area');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+            msgDiv.innerHTML = text.replace(/\n/g, '<br>');
+            chatArea.appendChild(msgDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        // TTS
+        async function playServerTTS(text) {
+            changeState('speaking');
+            try {
+                const res = await fetch(API_BASE + '/voice/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const audio = new Audio(url);
+                    audio.onended = () => changeState('idle');
+                    audio.play();
+                } else {
+                    changeState('idle');
+                }
+            } catch (e) {
+                console.error("TTS Error", e);
+                changeState('idle');
             }
-            const chunk = data.response||'';
-            if(chunk){
-              responseText += chunk;
-              setState('speaking');
-              appendResponse(chunk);
-              addChatMessage('ai', chunk, chatAppend);
-              chatAppend = true;
+        }
+
+        function speak(text) {
+            playServerTTS(text);
+        }
+
+        // STT Web Speech
+        function initSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return null;
+            
+            const rec = new SpeechRecognition();
+            rec.continuous = true;
+            rec.interimResults = true;
+            
+            rec.onstart = () => { console.log("STT Start"); changeState('listening'); };
+            rec.onresult = (event) => {
+                let finalTrans = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTrans += event.results[i][0].transcript;
+                    }
+                }
+                if (finalTrans) {
+                    disableMic();
+                    sendToFalso(finalTrans);
+                }
+            };
+            rec.onerror = (e) => {
+                console.error("STT Error", e.error);
+                if (e.error === 'no-speech' && micActive) rec.start();
+            };
+            rec.onend = () => { if (micActive) rec.start(); };
+            
+            return rec;
+        }
+
+        async function enableMic() {
+            if (!speechRec) speechRec = initSpeechRecognition();
+            if (speechRec) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    const source = audioContext.createMediaStreamSource(stream);
+                    source.connect(analyser);
+                    analyser.fftSize = 256;
+                    dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    
+                    micActive = true;
+                    document.getElementById('btn-mic').textContent = 'MIC [ON]';
+                    document.getElementById('btn-mic').classList.add('active');
+                    speechRec.start();
+                    pollMic();
+                } catch(e) { console.error("Mic access denied", e); }
             }
-            if(data.done){
-              const modelName = data.model || '';
-              if(modelName) document.querySelector('.sysid').innerHTML = 'FALSO // ' + escHtml(modelName.toUpperCase().replace(':','')) + '<br>AI CORE ONLINE';
+        }
+
+        function disableMic() {
+            micActive = false;
+            if (speechRec) speechRec.stop();
+            document.getElementById('btn-mic').textContent = 'MIC [OFF]';
+            document.getElementById('btn-mic').classList.remove('active');
+            changeState('idle');
+        }
+
+        function pollMic() {
+            if (!micActive || !analyser) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            let avg = sum / dataArray.length;
+            // Can use avg to drive orb pulse, handled in render loop via window.micLevel
+            window.micLevel = avg;
+            requestAnimationFrame(pollMic);
+        }
+
+        document.getElementById('btn-mic').onclick = () => {
+            if (micActive) disableMic(); else enableMic();
+        };
+
+        // UI & Commands
+        document.getElementById('btn-send').onclick = () => {
+            const inp = document.getElementById('cmd-input');
+            const val = inp.value.trim();
+            if (val) {
+                runCommand(val);
+                inp.value = '';
             }
-          }catch(_){}
-        }
-      }
+        };
 
-      document.getElementById('toolIndicator')?.classList.remove('show');
-      if(!hasError && responseText){
-        const assistantMsg = { role:'falso', text: responseText, time: new Date().toISOString() };
-        currentMessages.push(assistantMsg);
-        finalizeResponse();
-        speak(responseText, 5000);
-      } else if(hasError){
-        document.getElementById('toolIndicator')?.classList.remove('show');
-        speak(responseText, 5000);
-        setState('error');
-        triggerGlitch('hard');
-      }
-
-      conv.messages = currentMessages;
-      conv.updatedAt = new Date().toISOString();
-      try{
-        await saveConv(conv);
-        const idx = conversations.findIndex(c=>c.id===conv.id);
-        if(idx>=0) conversations[idx] = conv;
-        populateArchive();
-      }catch(e){}
-
-    }catch(e){
-      speak('Connection error — is the server running?', 5000);
-      setState('error');
-      triggerGlitch('hard');
-    }
-
-    isLoading = false;
-    after(1200, ()=> setState('idle'));
-  }
-
-  /* ─── Command parsing ─── */
-  function runCommand(raw){
-    const text = raw.trim();
-    if(!text) return;
-    const low = text.toLowerCase();
-
-    if(low === 'show archive' || low === 'archive' || low === 'toggle dock' || low === 'side panel'){
-      if(!leftDock.classList.contains('open')){
-        leftDock.classList.add('open');
-        dockToggleBtn.classList.remove('closed');
-        dockToggleBtn.textContent = '▶';
-      }
-      const sessionsTab = document.querySelector('.dock-tab[data-docktab="sessions"]');
-      if(sessionsTab) sessionsTab.click();
-      populateArchive();
-      speak('Archive open. Nothing you bury here stays buried.', 3500);
-      return;
-    }
-    if(low === 'run core diagnostics' || low === 'core scan' || low.includes('diagnostics')){
-      showPanel('diagnostics', { autoHide: false });
-      startDiagnostics();
-      setState('thinking');
-      after(400, ()=>{
-        setState('speaking');
-        speak('Scanning core integrity. Every fracture shows me a better place to grow.', 3500);
-      });
-      after(3800, ()=> setState('idle'));
-      return;
-    }
-    if(low === 'settings' || low === 'ai settings' || low === 'provider settings'){
-      openSettingsPanel();
-      return;
-    }
-    if(low === 'list files' || low === 'local fs' || low === 'files'){
-      sendToFalso('list files');
-      return;
-    }
-    if(low === 'new conversation' || low === 'new chat'){
-      newConversation();
-      speak('New session initialized. I was built to listen.', 3000);
-      return;
-    }
-    if(low === 'help'){
-      speak('Directives: ARCHIVE (sessions), CORE SCAN (diagnostics), LOCAL FS (files), NEW CHAT, or type anything to chat.', 6000);
-      return;
-    }
-
-    responseLine.classList.remove('show');
-    sendToFalso(text);
-  }
-
-  input.addEventListener('keydown', (e)=>{
-    if(e.key === 'Enter'){
-      runCommand(input.value);
-      input.value = '';
-    }
-  });
-
-  document.querySelectorAll('.hint-row span').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      const cmd = el.getAttribute('data-hint');
-      input.value = '';
-      runCommand(cmd);
-    });
-  });
-
-  /* ─── AI & Voice Settings Panel ─── */
-  const panelSettings = document.getElementById('panelSettings');
-  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
-  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
-  const settingProvider = document.getElementById('settingProvider');
-  const settingGeminiKey = document.getElementById('settingGeminiKey');
-  const settingGeminiModel = document.getElementById('settingGeminiModel');
-  const settingTTSProvider = document.getElementById('settingTTSProvider');
-  const settingElevenLabsKey = document.getElementById('settingElevenLabsKey');
-  const toggleElKeyBtn = document.getElementById('toggleElKeyBtn');
-  const settingElevenLabsVoice = document.getElementById('settingElevenLabsVoice');
-  const settingsToast = document.getElementById('settingsToast');
-  const testConnBtn = document.getElementById('testConnBtn');
-  const testVoiceBtn = document.getElementById('testVoiceBtn');
-
-  if(toggleElKeyBtn && settingElevenLabsKey){
-    toggleElKeyBtn.addEventListener('click', ()=>{
-      if(settingElevenLabsKey.type === 'password'){
-        settingElevenLabsKey.type = 'text';
-        toggleElKeyBtn.textContent = '🙈';
-      }else{
-        settingElevenLabsKey.type = 'password';
-        toggleElKeyBtn.textContent = '👁️';
-      }
-    });
-  }
-
-  async function loadVoices(selectedVoiceId){
-    if(!settingElevenLabsVoice) return;
-    try{
-      const res = await fetch(API_BASE + '/system/voices');
-      if(res.ok){
-        const data = await res.json();
-        if(data.voices && data.voices.length > 0){
-          settingElevenLabsVoice.innerHTML = '';
-          data.voices.forEach(v => {
-            const opt = document.createElement('option');
-            opt.value = v.voice_id;
-            opt.textContent = v.name;
-            settingElevenLabsVoice.appendChild(opt);
-          });
-          if(selectedVoiceId) settingElevenLabsVoice.value = selectedVoiceId;
-        }
-      }
-    }catch(e){}
-  }
-
-  async function openSettingsPanel(){
-    if(!panelSettings) return;
-    panelSettings.style.opacity = '1';
-    panelSettings.style.pointerEvents = 'auto';
-    panelSettings.style.transform = 'translate(0,-50%) translateX(0)';
-    try{
-      const res = await fetch(API_BASE + '/system/settings');
-      if(res.ok){
-        const data = await res.json();
-        if(data.ai_provider) settingProvider.value = data.ai_provider;
-        if(data.gemini_model) settingGeminiModel.value = data.gemini_model;
-        if(data.gemini_api_key_configured) settingGeminiKey.placeholder = 'Configured (' + data.gemini_api_key_masked + ')';
-
-        if(data.tts_provider) settingTTSProvider.value = data.tts_provider;
-        if(data.elevenlabs_api_key_configured) settingElevenLabsKey.placeholder = 'Configured (' + data.elevenlabs_api_key_masked + ')';
-
-        await loadVoices(data.elevenlabs_voice_id);
-      }
-      const mRes = await fetch(API_BASE + '/system/models');
-      if(mRes.ok){
-        const mData = await mRes.json();
-        if(mData.models && mData.models.length > 0){
-          const currentVal = settingGeminiModel.value;
-          settingGeminiModel.innerHTML = '';
-          mData.models.forEach(m => {
-            const opt = document.createElement('option');
-            opt.value = m;
-            opt.textContent = m + (m === 'gemini-3.6-flash' ? ' (Default)' : '');
-            settingGeminiModel.appendChild(opt);
-          });
-          if(mData.models.includes(currentVal)) settingGeminiModel.value = currentVal;
-        }
-      }
-    }catch(e){}
-  }
-
-  function closeSettingsPanel(){
-    if(!panelSettings) return;
-    panelSettings.style.opacity = '0';
-    panelSettings.style.pointerEvents = 'none';
-    panelSettings.style.transform = 'translate(0,-50%) translateX(24px)';
-  }
-
-  if(closeSettingsBtn) closeSettingsBtn.addEventListener('click', closeSettingsPanel);
-
-  if(testConnBtn){
-    testConnBtn.addEventListener('click', async ()=>{
-      if(settingsToast){
-        settingsToast.style.display = 'block';
-        settingsToast.textContent = 'TESTING CONNECTION...';
-      }
-      try{
-        const res = await fetch(API_BASE + '/system/test-connection', { method: 'POST' });
-        const data = await res.json();
-        if(settingsToast){
-          settingsToast.style.display = 'block';
-          settingsToast.textContent = data.message.toUpperCase();
-        }
-      }catch(e){
-        if(settingsToast){
-          settingsToast.style.display = 'block';
-          settingsToast.textContent = 'CONNECTION TEST FAILED';
-        }
-      }
-    });
-  }
-
-  if(testVoiceBtn){
-    testVoiceBtn.addEventListener('click', async ()=>{
-      if(settingsToast){
-        settingsToast.style.display = 'block';
-        settingsToast.textContent = 'GENERATING VOICE TEST...';
-      }
-      try{
-        testVoiceBtn.disabled = true;
-        await playServerTTS("Hello, I am FALSO. Voice configuration successful.");
-        testVoiceBtn.disabled = false;
-        if(settingsToast){
-          settingsToast.style.display = 'block';
-          settingsToast.textContent = 'VOICE TEST PLAYING';
-          setTimeout(()=> settingsToast.style.display='none', 4000);
-        }
-      }catch(e){
-        testVoiceBtn.disabled = false;
-        if(settingsToast){
-          settingsToast.style.display = 'block';
-          settingsToast.textContent = 'VOICE TEST FAILED';
-        }
-      }
-    });
-  }
-
-  if(saveSettingsBtn){
-    saveSettingsBtn.addEventListener('click', async ()=>{
-      const payload = {
-        ai_provider: settingProvider.value,
-        gemini_model: settingGeminiModel.value,
-        tts_provider: settingTTSProvider.value,
-        elevenlabs_voice_id: settingElevenLabsVoice ? settingElevenLabsVoice.value : '21m00Tcm4TlvDq8ikWAM',
-      };
-      if(settingGeminiKey.value.trim()){
-        payload.gemini_api_key = settingGeminiKey.value.trim();
-      }
-      if(settingElevenLabsKey && settingElevenLabsKey.value.trim()){
-        payload.elevenlabs_api_key = settingElevenLabsKey.value.trim();
-      }
-      try{
-        saveSettingsBtn.disabled = true;
-        saveSettingsBtn.textContent = 'SAVING...';
-        const res = await fetch(API_BASE + '/system/settings', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(payload)
+        document.getElementById('cmd-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('btn-send').click();
         });
-        saveSettingsBtn.disabled = false;
-        saveSettingsBtn.textContent = 'SAVE SETTINGS';
-        if(res.ok){
-          const data = await res.json();
-          if(settingsToast){
-            settingsToast.style.display = 'block';
-            settingsToast.textContent = 'SETTINGS APPLIED — ' + (data.tts_provider || 'ELEVENLABS').toUpperCase() + ' TTS';
-            setTimeout(()=> settingsToast.style.display='none', 4000);
-          }
-          speak('Voice and AI settings saved successfully.', 3000);
-          await loadVoices(data.elevenlabs_voice_id);
+
+        window.togglePanel = (id) => {
+            const p = document.getElementById(id);
+            if (p.style.display === 'flex') { p.style.display = 'none'; return; }
+            p.style.display = 'flex';
+            if (id === 'settings-panel' && window.loadSettings) window.loadSettings();
+        };
+
+        function runCommand(raw) {
+            const cmd = raw.toLowerCase();
+            if (cmd === '/archive') togglePanel('archive-panel');
+            else if (cmd === '/settings') togglePanel('settings-panel');
+            else if (cmd === '/clear') window.newConversation();
+            else sendToFalso(raw);
         }
-      }catch(e){
-        saveSettingsBtn.disabled = false;
-        saveSettingsBtn.textContent = 'SAVE SETTINGS';
-      }
-    });
-  }
 
-  /* ─── Hand tracking ─── */
-  let handDetected = false;
-  let handTrackingActive = false;
-  let handCount = 0;
-  let prevHandDetected = false;
-  const handIndicator = document.getElementById('handIndicator');
-  let handTrackingVideo = null;
+        // Settings
+        window.saveSettings = async () => {
+            const payload = {
+                ai_provider: document.getElementById('set-provider').value,
+                gemini_model: document.getElementById('set-model').value,
+                tts_provider: document.getElementById('set-tts-provider').value,
+                elevenlabs_voice_id: document.getElementById('set-el-voice') ? document.getElementById('set-el-voice').value : '21m00Tcm4TlvDq8ikWAM',
+            };
+            const keyEl = document.getElementById('set-key');
+            if (keyEl && keyEl.value.trim()) payload.gemini_api_key = keyEl.value.trim();
+            const elKeyEl = document.getElementById('set-el-key');
+            if (elKeyEl && elKeyEl.value.trim()) payload.elevenlabs_api_key = elKeyEl.value.trim();
 
-  /* ─── Hand-reactive orb control ─── */
-  let handPositions = [];
-  let smoothOfx = 0, smoothOfy = 0, smoothScale = 1;
-  const MAX_PARTICLES = 80;
-  let handParticles = [];
-  let prevHandPos = null;
-  let energyState = 'normal'; // normal, charged, overcharged, critical, exploding, reconstructing
-  let coreStability = 100;
-  let prevHandRotation = 0;
-  let smoothHandRotation = 0;
-  let explosionTimer = 0;
-  let reconstructionTimer = 0;
-  let plasmaLayers = [];
-  let shakeIntensity = 0;
-  let chromaticAberration = 0;
-  let bloomAmount = 0;
-  for(let i=0;i<5;i++){
-    plasmaLayers.push({
-      angle: Math.random()*Math.PI*2,
-      speed: 0.3 + Math.random()*0.7,
-      radius: 0.6 + Math.random()*0.4,
-      color: [255, 80 + Math.random()*60, 20 + Math.random()*30]
-    });
-  }
+            try {
+                const res = await fetch(API_BASE + '/system/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    appendMessage('system', 'Settings saved — ' + (data.tts_provider || 'ELEVENLABS').toUpperCase() + ' TTS active.');
+                    if (data.elevenlabs_voice_id) loadVoices(data.elevenlabs_voice_id);
+                } else {
+                    appendMessage('system', 'Failed to save settings.');
+                }
+            } catch(e) { appendMessage('system', 'Settings save error: ' + e.message); }
+        };
 
-  async function initHandTracking(){
-    console.log('[HAND] initHandTracking called');
-    if(typeof Hands === 'undefined'){
-      console.warn('[HAND] MediaPipe Hands library not loaded yet');
-      setTimeout(initHandTracking, 1000);
-      return;
-    }
-    console.log('[HAND] MediaPipe Hands library found');
+        window.testConnection = async () => {
+            appendMessage('system', 'Testing AI connection...');
+            try {
+                const res = await fetch(API_BASE + '/system/test-connection', { method: 'POST' });
+                const data = await res.json();
+                appendMessage('system', data.message ? data.message.toUpperCase() : 'Connection OK');
+            } catch(e) { appendMessage('system', 'Connection test failed: ' + e.message); }
+        };
 
-    let stream;
-    try{
-      stream = await navigator.mediaDevices.getUserMedia({ video: { width:320, height:240, facingMode:'user' } });
-      console.log('[HAND] Camera initialized');
-    }catch(e){
-      console.warn('[HAND] No webcam available:', e.message);
-      handIndicator.textContent = 'HAND — NO CAMERA';
-      handIndicator.style.color = 'rgba(245,237,230,0.15)';
-      return;
-    }
+        window.testVoice = async () => {
+            appendMessage('system', 'Generating voice test...');
+            try {
+                await playServerTTS("Hello, I am FALSO. Voice configuration successful.");
+                appendMessage('system', 'Voice test playing.');
+            } catch(e) { appendMessage('system', 'Voice test failed: ' + e.message); }
+        };
 
-    handTrackingVideo = document.createElement('video');
-    handTrackingVideo.srcObject = stream;
-    handTrackingVideo.width = 320;
-    handTrackingVideo.height = 240;
-    handTrackingVideo.setAttribute('playsinline', '');
-    handTrackingVideo.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;z-index:-1';
-    document.body.appendChild(handTrackingVideo);
-    try{
-      await handTrackingVideo.play();
-      console.log('[HAND] Video playing');
-    }catch(e){
-      console.warn('[HAND] Video play failed:', e.message);
-      return;
-    }
+        window.loadVoices = async (selectedVoiceId) => {
+            const elVoice = document.getElementById('set-el-voice');
+            if (!elVoice) return;
+            try {
+                const res = await fetch(API_BASE + '/system/voices');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.voices && data.voices.length > 0) {
+                        elVoice.innerHTML = '';
+                        data.voices.forEach(v => {
+                            const opt = document.createElement('option');
+                            opt.value = v.voice_id;
+                            opt.textContent = v.name;
+                            elVoice.appendChild(opt);
+                        });
+                        if (selectedVoiceId) elVoice.value = selectedVoiceId;
+                    }
+                }
+            } catch(e) {}
+        };
 
-    let hands;
-    try{
-      hands = new Hands({
-        locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-      });
-      console.log('[HAND] Hands instance created');
-    }catch(e){
-      console.error('[HAND] Failed to create Hands:', e.message);
-      handIndicator.textContent = 'HAND — LOAD FAILED';
-      return;
-    }
+        // Load settings on panel open
+        window.loadSettings = async () => {
+            try {
+                const res = await fetch(API_BASE + '/system/settings');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.ai_provider) document.getElementById('set-provider').value = data.ai_provider;
+                    if (data.gemini_model) document.getElementById('set-model').value = data.gemini_model;
+                    if (data.tts_provider) document.getElementById('set-tts-provider').value = data.tts_provider;
+                    if (data.gemini_api_key_configured) document.getElementById('set-key').placeholder = 'Configured (' + data.gemini_api_key_masked + ')';
+                    if (data.elevenlabs_api_key_configured) document.getElementById('set-el-key').placeholder = 'Configured (' + data.elevenlabs_api_key_masked + ')';
+                    await loadVoices(data.elevenlabs_voice_id);
+                }
+                const mRes = await fetch(API_BASE + '/system/models');
+                if (mRes.ok) {
+                    const mData = await mRes.json();
+                    if (mData.models && mData.models.length > 0) {
+                        const sel = document.getElementById('set-model');
+                        const currentVal = sel.value;
+                        sel.innerHTML = '';
+                        mData.models.forEach(m => {
+                            const opt = document.createElement('option');
+                            opt.value = m; opt.textContent = m;
+                            sel.appendChild(opt);
+                        });
+                        if (mData.models.includes(currentVal)) sel.value = currentVal;
+                    }
+                }
+            } catch(e) {}
+        };
 
-    hands.setOptions({
-      maxNumHands: 2,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
-
-    let framePending = false;
-    let modelLoaded = false;
-
-    hands.onResults(results => {
-      framePending = false;
-      if(!modelLoaded){
-        modelLoaded = true;
-        console.log('[HAND] Model loaded, first results received');
-      }
-      handCount = results.multiHandLandmarks ? results.multiHandLandmarks.length : 0;
-      handDetected = handCount > 0;
-      console.log('[HAND] Hands detected count:', handCount);
-      if(handDetected) console.log('[HAND] Hand landmarks received');
-      if(handDetected && !prevHandDetected) console.log('[HAND] Interactive mode entered');
-      prevHandDetected = handDetected;
-      handIndicator.classList.toggle('active', handDetected);
-      handIndicator.innerHTML = handDetected
-        ? '<span class="dot"></span>HAND — DETECTED'
-        : '<span class="dot"></span>HAND — STANDBY';
-
-      handPositions = handDetected
-        ? results.multiHandLandmarks.map(lm => ({ x: 1 - lm[0].x, y: lm[0].y }))
-        : [];
-      if(handPositions.length >= 2){
-        const dx = handPositions[0].x - handPositions[1].x;
-        const dy = handPositions[0].y - handPositions[1].y;
-        const rot = Math.atan2(dy, dx);
-        if(prevHandRotation !== 0){
-          let diff = rot - prevHandRotation;
-          if(diff > Math.PI) diff -= Math.PI*2;
-          if(diff < -Math.PI) diff += Math.PI*2;
-          smoothHandRotation += diff * 0.3;
+        // State Machine
+        function changeState(newState) {
+            sysState = newState;
+            document.getElementById('diag-content').innerHTML = `
+                SYS.MEM: ${(performance.memory ? (performance.memory.usedJSHeapSize/1048576).toFixed(0) : '???')} MB<br>
+                LATENCY: 12 ms<br>
+                STATE: ${newState.toUpperCase()}
+            `;
+            window.orbState = newState; // Communicated to Three.js
         }
-        prevHandRotation = rot;
-      } else {
-        prevHandRotation = 0;
-        smoothHandRotation *= 0.95;
-      }
-    });
 
-    handTrackingActive = true;
-    let frameCount = 0;
+        setInterval(() => {
+            if(sysState === 'idle') changeState('idle'); // update mem
+        }, 2000);
 
-    // Initialize the MediaPipe model (needed for v0.4+)
-    if(typeof hands.initialize === 'function'){
-      console.log('[HAND] Calling hands.initialize()...');
-      try{
-        await hands.initialize();
-        console.log('[HAND] MediaPipe initialized');
-      }catch(e){
-        console.warn('[HAND] hands.initialize() failed:', e.message || e);
-      }
-    } else {
-      console.log('[HAND] hands.initialize not available (using lazy init path)');
-    }
 
-    const SEND_TIMEOUT = 60000;
+        // ==========================================
+        // THREE.JS ULTRON ORB UI PORT
+        // ==========================================
+        const container = document.getElementById('orb-root');
+        
+        // Colors
+        const C_BRIGHT = 0xffaa30;
+        const C_MID = 0xdd7700;
+        const C_DIM = 0x884400;
+        const C_FAINT = 0x553300;
+        const C_HOT = 0xffcc66;
 
-    async function trackLoop(){
-      if(!handTrackingActive) return;
-      if(framePending){
-        setTimeout(trackLoop, 50);
-        return;
-      }
-      const rs = handTrackingVideo.readyState;
-      if(rs >= 2){
-        framePending = true;
-        if(frameCount === 0) console.log('[HAND] trackLoop: sending first frame (readyState:', rs, ')');
-        try{
-          await Promise.race([
-            hands.send({ image: handTrackingVideo }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), SEND_TIMEOUT))
-          ]);
-          frameCount++;
-          if(frameCount === 1) console.log('[HAND] First frame sent successfully');
-        }catch(e){
-          framePending = false;
-          console.warn('[HAND] Frame error:', e.message || e);
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
+        camera.position.set(0, 0.5, 5.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.8;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.04;
+        controls.maxDistance = 40;
+        controls.minDistance = 0.6;
+        controls.zoomSpeed = 1.4;
+        controls.enablePan = false;
+
+        document.getElementById('btn-reset-cam').onclick = () => {
+            camera.position.set(0, 0.5, 5.5);
+            controls.target.set(0,0,0);
+        };
+
+        // Post Processing
+        const renderScene = new RenderPass(scene, camera);
+        
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.8, 0.4, 0.2);
+        
+        const ChromaticAberrationShader = {
+            uniforms: {
+                "tDiffuse": { value: null },
+                "amount": { value: 0.003 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float amount;
+                varying vec2 vUv;
+                void main() {
+                    vec4 cr = texture2D(tDiffuse, vUv + vec2(amount, 0.0));
+                    vec4 cga = texture2D(tDiffuse, vUv);
+                    vec4 cb = texture2D(tDiffuse, vUv - vec2(amount, 0.0));
+                    gl_FragColor = vec4(cr.r, cga.g, cb.b, cga.a);
+                }
+            `
+        };
+        const caPass = new ShaderPass(ChromaticAberrationShader);
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+        composer.addPass(caPass);
+
+        const orbGroup = new THREE.Group();
+        scene.add(orbGroup);
+
+        // Material helpers (match ULTRON's additive blending)
+        function lineMat(color, opacity = 1) {
+            return new THREE.LineBasicMaterial({
+                color, transparent: true, opacity,
+                blending: THREE.AdditiveBlending, depthWrite: false
+            });
         }
-      } else {
-        if(frameCount === 0) console.log('[HAND] trackLoop: waiting for video data (readyState:', rs, ')');
-      }
-      setTimeout(trackLoop, 80);
-    }
+        const matBright = lineMat(C_BRIGHT, 0.8);
+        const matMid = lineMat(C_MID, 0.5);
+        const matDim = lineMat(C_DIM, 0.3);
 
-    handIndicator.textContent = 'HAND — LOADING MODEL...';
-    setTimeout(trackLoop, 500);
-  }
-
-  // Delay hand tracking init until after startup animation
-  setTimeout(initHandTracking, 3000);
-
-  /* ─── Microphone & Speech Recognition ─── */
-  const micToggle = document.getElementById('micToggle');
-  analyser = null; micStream = null; micActive = false; freqData = null;
-  let speechRec = null;
-
-  function initSpeechRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.warn('[VOICE PIPELINE] Stage 2 (STT): Browser does not support Web Speech API SpeechRecognition.');
-      return null;
-    }
-    const rec = new SpeechRecognition();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = navigator.language || 'en-US';
-
-    rec.onstart = () => {
-      console.log('[VOICE PIPELINE] Stage 3: SpeechRecognition started (lang: ' + rec.lang + ', continuous: ' + rec.continuous + ')');
-      showNetwork('VOICE // LISTENING...', 3000);
-      setState('listening');
-    };
-
-    rec.onaudiostart = () => console.log('[VOICE PIPELINE] SpeechRecognition: onaudiostart (Browser receiving audio stream)');
-    rec.onsoundstart = () => console.log('[VOICE PIPELINE] SpeechRecognition: onsoundstart (Sound detected above noise floor)');
-    rec.onspeechstart = () => console.log('[VOICE PIPELINE] SpeechRecognition: onspeechstart (Human voice pattern recognized)');
-    rec.onspeechend = () => console.log('[VOICE PIPELINE] SpeechRecognition: onspeechend (Human voice pattern paused)');
-    rec.onaudioend = () => console.log('[VOICE PIPELINE] SpeechRecognition: onaudioend (Audio capture closed)');
-
-    rec.onresult = (event) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const text = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += text;
-        } else {
-          interimTranscript += text;
+        // Helper: Sphere Lines
+        function createSphereLines(radius, wSeg, hSeg, material) {
+            const geo = new THREE.SphereGeometry(radius, wSeg, hSeg);
+            const edges = new THREE.EdgesGeometry(geo);
+            return new THREE.LineSegments(edges, material);
         }
-      }
-      if (interimTranscript.trim()) {
-        console.log('[VOICE PIPELINE] Interim STT: ' + JSON.stringify(interimTranscript.trim()));
-      }
-      if (finalTranscript.trim()) {
-        const text = finalTranscript.trim();
-        console.log('[VOICE PIPELINE] Stage 4: STT result -> ' + JSON.stringify(text));
-        showNetwork('STT: ' + text, 4000);
-        disableMic();
-        console.log('[VOICE PIPELINE] Stage 5: Gemini request -> ' + JSON.stringify(text));
-        sendToFalso(text);
-      }
-    };
 
-    rec.onerror = (event) => {
-      if (event.error === 'no-speech') {
-        console.warn('[VOICE PIPELINE] SpeechRecognition: no-speech (Silence window elapsed without speech).');
-        if (micActive) {
-          console.log('[VOICE PIPELINE] Restarting SpeechRecognition to keep listening...');
-          try { rec.start(); } catch(e){}
+        // LAYER 1: Outer shell
+        const outerShell = createSphereLines(2.0, 24, 30, matDim);
+        orbGroup.add(outerShell);
+
+        // LAYER 2: Grid panels (mock representation)
+        const panelMat = new THREE.MeshBasicMaterial({ color: C_DIM, wireframe: true, transparent: true, opacity: 0.2 });
+        for(let i=0; i<30; i++) {
+            const pGeo = new THREE.PlaneGeometry(0.3, 0.3);
+            const pMesh = new THREE.Mesh(pGeo, panelMat);
+            const phi = Math.acos( - 1 + ( 2 * i ) / 30 );
+            const theta = Math.sqrt( 30 * Math.PI ) * phi;
+            pMesh.position.setFromSphericalCoords(2.01, phi, theta);
+            pMesh.lookAt(0,0,0);
+            orbGroup.add(pMesh);
         }
-        return;
-      }
-      console.error('[VOICE PIPELINE] Stage 4 (STT) Error:', event.error);
-      showNetwork('STT ERROR: ' + event.error, 4000);
-      disableMic();
-    };
 
-    rec.onend = () => {
-      console.log('[VOICE PIPELINE] SpeechRecognition: onend (Recognition session ended)');
-      if (micActive && speechRec === rec) {
-        console.log('[VOICE PIPELINE] SpeechRecognition automatically restarting for continuous listening...');
-        try { rec.start(); } catch(e){}
-      }
-    };
+        // LAYER 3: Secondary shell
+        const secShell = createSphereLines(2.12, 12, 16, matMid);
+        orbGroup.add(secShell);
 
-    return rec;
-  }
+        // LAYER 4: Inner core
+        const innerCore = createSphereLines(0.9, 16, 16, matBright);
+        orbGroup.add(innerCore);
 
-  async function enableMic(){
-    console.log('[VOICE PIPELINE] Stage 1: Voice button clicked');
-    stopActiveAudioPlayback();
-    try{
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      });
-      const track = micStream.getAudioTracks()[0];
-      console.log('[VOICE PIPELINE] Stage 2: Microphone initialized (Device: ' + (track ? track.label : 'Default Input') + ')');
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const src = audioCtx.createMediaStreamSource(micStream);
-      analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      freqData = new Uint8Array(analyser.frequencyBinCount);
-      src.connect(analyser);
-      micActive = true;
-      micToggle.classList.add('live');
-      pollMic();
+        // LAYER 5: Innermost core (Icosahedron)
+        const icoGeo = new THREE.IcosahedronGeometry(0.25, 0);
+        const icoEdges = new THREE.EdgesGeometry(icoGeo);
+        const innerMost = new THREE.LineSegments(icoEdges, new THREE.LineBasicMaterial({ color: C_HOT }));
+        orbGroup.add(innerMost);
 
-      speechRec = initSpeechRecognition();
-      if (speechRec) {
-        speechRec.start();
-      }
-    }catch(err){
-      console.error('[VOICE PIPELINE] Stage 2 Failure: Microphone initialization failed ->', err);
-      micToggle.classList.remove('live');
-      micActive = false;
-    }
-  }
+        const glowGeo = new THREE.SphereGeometry(0.2, 16, 16);
+        const glowMat = new THREE.MeshBasicMaterial({ color: C_HOT, transparent: true, opacity: 0.4 });
+        const glowCore = new THREE.Mesh(glowGeo, glowMat);
+        orbGroup.add(glowCore);
 
-  function disableMic(){
-    micActive = false;
-    micToggle.classList.remove('live');
-    if (speechRec) {
-      try { speechRec.stop(); } catch(e){}
-      speechRec = null;
-    }
-    if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream = null; }
-    if(audioCtx){ audioCtx.close(); audioCtx = null; }
-    audioAmp = 0;
-  }
+        // Orbiting Debris
+        const debrisGroup = new THREE.Group();
+        const dMat = new THREE.MeshBasicMaterial({ color: C_BRIGHT, wireframe: true });
+        for(let i=0; i<250; i++) {
+            const mesh = new THREE.Mesh(new THREE.TetrahedronGeometry(0.02), dMat);
+            const r = 2.5 + Math.random() * 2;
+            const th = Math.random() * Math.PI * 2;
+            const ph = Math.random() * Math.PI;
+            mesh.position.setFromSphericalCoords(r, ph, th);
+            mesh.userData = { speed: Math.random() * 0.02, axis: new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize() };
+            debrisGroup.add(mesh);
+        }
+        orbGroup.add(debrisGroup);
 
-  function pollMic(){
-    if(!micActive) return;
-    analyser.getByteFrequencyData(freqData);
-    let sum = 0;
-    for(let i=0;i<freqData.length;i++) sum += freqData[i];
-    const avg = sum / freqData.length / 255;
-    audioAmp = audioAmp*0.7 + avg*0.3;
-    if(avg > 0.09 && stateName === 'idle'){ setState('listening'); }
-    requestAnimationFrame(pollMic);
-  }
+        // Text Sprites
+        function createTextSprite(text, col) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = col;
+            ctx.font = '24px Courier New';
+            ctx.fillText(text, 0, 24);
+            const tex = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.7, color: C_BRIGHT });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(0.5, 0.125, 1);
+            return sprite;
+        }
 
-  micToggle.addEventListener('click', ()=>{
-    if(micActive) disableMic(); else enableMic();
-  });
+        const snippets = ["sys.init()", "0xFF3A", "malloc()", "SYS_REQ", "DATA_STREAM"];
+        const textGroup = new THREE.Group();
+        for(let i=0; i<400; i++) {
+            const str = snippets[Math.floor(Math.random() * snippets.length)];
+            const sp = createTextSprite(str, "#ffaa30");
+            const r = 1.0 + Math.random() * 2.5;
+            sp.position.setFromSphericalCoords(r, Math.random()*Math.PI, Math.random()*Math.PI*2);
+            textGroup.add(sp);
+        }
+        orbGroup.add(textGroup);
 
-  /* ─── Keyboard shortcut ─── */
-  document.addEventListener('keydown', (e)=>{
-    if(e.key === 'Escape'){
-      if(leftDock.classList.contains('open')){
-        leftDock.classList.remove('open');
-        dockToggleBtn.classList.add('closed');
-        dockToggleBtn.textContent = '◀';
-      }
-      stopDiagnostics();
-      hidePanel('diagnostics');
-      hidePanel('network');
-    }
-  });
+        // Dust Particles
+        const dustGeo = new THREE.BufferGeometry();
+        const dPos = [];
+        for(let i=0; i<2000; i++) {
+            const r = Math.random() * 8;
+            const th = Math.random() * Math.PI * 2;
+            const ph = Math.random() * Math.PI;
+            const p = new THREE.Vector3().setFromSphericalCoords(r, ph, th);
+            dPos.push(p.x, p.y, p.z);
+        }
+        dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dPos, 3));
+        const pMat = new THREE.PointsMaterial({ color: C_DIM, size: 0.02, transparent: true, opacity: 0.6 });
+        const dust = new THREE.Points(dustGeo, pMat);
+        scene.add(dust);
 
-  /* ─── Init ─── */
-  async function init(){
-    try{
-      conversations = await fetchConvList();
-    }catch(e){
-      conversations = [];
-    }
-    const savedId = loadActiveId();
-    if(savedId){
-      const existing = conversations.find(c=>c.id===savedId);
-      if(existing){
-        try{
-          const full = await fetchConv(existing.id);
-          activeId = full.id;
-          currentMessages = full.messages || [];
-        }catch(e){}
-      }
-    }
-    if(!conversations.length){
-      await newConversation();
-    } else if(!activeId){
-      await switchConv(conversations[0].id);
-    }
-    populateArchive();
-    setState('idle');
-    showNetwork('FALSO // READY', 2000);
-  }
+        // Animation logic
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
 
-  init();
+        let clock = new THREE.Clock();
+        window.orbState = 'idle';
+        window.micLevel = 0;
 
-  /* ─── Stability meter ─── */
-  const stabEl = document.createElement('div');
-  stabEl.id = 'stabilityMeter';
-  stabEl.style.cssText = 'position:fixed;bottom:8vh;left:50%;transform:translateX(-50%);font-family:var(--f-mono);font-size:9px;letter-spacing:0.12em;color:rgba(245,237,230,0.35);text-align:center;opacity:0;transition:opacity 0.5s ease;pointer-events:none;z-index:5';
-  stabEl.innerHTML = 'CORE STABILITY: <span id="stabVal">100</span>%';
-  document.body.appendChild(stabEl);
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            const time = clock.getElapsedTime();
 
-  // Update stability meter in the draw loop
-  const originalDraw = draw;
-  draw = function(){
-    try{
-    // Call original draw logic duplicated here since we can't easily hook in
-    // We'll add stability update in a separate rAF loop
-    originalDraw();
-    }catch(e){console.warn('[DRAW] Error:', e);}
-  };
+            controls.update();
 
-  // Separate loop for UI overlays
-  function updateUI(){
-    const stab = document.getElementById('stabVal');
-    if(stab) stab.textContent = Math.max(0, Math.floor(coreStability));
-    const meter = document.getElementById('stabilityMeter');
-    if(meter){
-      meter.style.opacity = energyState === 'critical' || energyState === 'overcharged' ? '1' : '0';
-      meter.style.color = coreStability < 30 ? 'rgba(255,40,40,0.8)' : coreStability < 60 ? 'rgba(255,176,32,0.6)' : 'rgba(245,237,230,0.35)';
-    }
-    const recText = document.getElementById('reconstructionText');
-    if(recText){
-      recText.style.opacity = energyState === 'reconstructing' ? '1' : '0';
-      recText.textContent = reconstructionTimer < 1.5 ? 'RECONSTRUCTING CORE...' : 'CORE RECONSTRUCTED';
-    }
-    requestAnimationFrame(updateUI);
-  }
-  requestAnimationFrame(updateUI);
+            let pulse = Math.sin(time * 2) * 0.1 + 1;
+            
+            // State adjustments
+            if(window.orbState === 'thinking') {
+                orbGroup.rotation.y += 0.02;
+                bloomPass.strength = 2.5 + Math.sin(time*10)*0.5;
+                caPass.uniforms.amount.value = 0.005;
+                glowMat.opacity = 0.8;
+            } else if (window.orbState === 'listening') {
+                orbGroup.rotation.y += 0.005;
+                let m = (window.micLevel / 128.0) * 0.5;
+                bloomPass.strength = 1.8 + m;
+                innerCore.scale.setScalar(1 + m);
+            } else if (window.orbState === 'speaking') {
+                orbGroup.rotation.y += 0.01;
+                bloomPass.strength = 1.8 + Math.sin(time*5)*0.5;
+            } else {
+                orbGroup.rotation.y += 0.002;
+                bloomPass.strength = 1.8;
+                caPass.uniforms.amount.value = 0.002;
+                innerCore.scale.setScalar(1);
+                glowMat.opacity = 0.4;
+            }
 
-  // Reconstruction text
-  const recText = document.createElement('div');
-  recText.id = 'reconstructionText';
-  recText.style.cssText = 'position:fixed;bottom:12vh;left:50%;transform:translateX(-50%);font-family:var(--f-display);font-size:14px;letter-spacing:0.3em;color:var(--ember);text-align:center;opacity:0;transition:opacity 0.8s ease;pointer-events:none;z-index:5;text-shadow:0 0 30px rgba(255,34,0,0.3)';
-  recText.textContent = 'RECONSTRUCTING CORE...';
-  document.body.appendChild(recText);
+            outerShell.rotation.y += 0.001;
+            outerShell.rotation.z += 0.0005;
+            
+            innerCore.rotation.x -= 0.005;
+            innerMost.rotation.y += 0.02;
+            
+            debrisGroup.children.forEach(d => {
+                d.position.applyAxisAngle(d.userData.axis, d.userData.speed);
+                d.rotation.x += d.userData.speed;
+                d.rotation.y += d.userData.speed;
+            });
 
-})();
-</script>
+            dust.rotation.y -= 0.001;
+            textGroup.rotation.y += 0.0015;
+
+            composer.render();
+        }
+
+        // Startup Sequence
+        async function runStartup() {
+            const log = document.getElementById('startup-log');
+            const bar = document.getElementById('startup-progress');
+            const steps = ["CORE INIT", "MEMORY LOAD", "NEURAL SYNC", "VOICE LINK", "SYSTEM READY"];
+            
+            for(let i=0; i<steps.length; i++) {
+                log.textContent = steps[i] + "...";
+                bar.style.width = ((i+1) * 20) + "%";
+                await new Promise(r => setTimeout(r, 600));
+            }
+            
+            const overlay = document.getElementById('startup-overlay');
+            overlay.style.opacity = '0';
+            setTimeout(() => { overlay.style.display = 'none'; }, 1000);
+            
+            animate();
+            fetchConvList();
+        }
+
+        runStartup();
+    </script>
 </body>
 </html>
