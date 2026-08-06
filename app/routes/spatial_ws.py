@@ -88,11 +88,17 @@ async def spatial_broadcaster_loop():
             usb_devices = system_monitor.get_usb_devices()
             browser_tabs = system_monitor.get_browser_tabs()
 
+            from app.services.context_detector import context_detector
+            git_ctx = context_detector.detect_context()
+
             context_data = {
-                "project": "Project-Falso",
-                "folder": "c:/Users/Admin/Project-Falso",
+                "project": git_ctx.get("current_project", "Project-Falso"),
+                "folder": git_ctx.get("current_folder", "c:/Users/Admin/Project-Falso"),
                 "active_window": stats.get("user_context", {}).get("active_window", "Project-Falso"),
-                "active_file": recent_files[0]["name"] if recent_files else "main.py"
+                "active_file": recent_files[0]["name"] if recent_files else "main.py",
+                "git_branch": git_ctx.get("git_branch", "main"),
+                "git_uncommitted": git_ctx.get("git_uncommitted", 0),
+                "running_ide": git_ctx.get("running_ide", "VS Code")
             }
 
             # Construct diffable payload summary (omit exact timestamp from hash check)

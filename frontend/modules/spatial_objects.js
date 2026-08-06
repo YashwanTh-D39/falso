@@ -50,8 +50,8 @@ export class SpatialObjectManager {
     const activeFile = ctx.active_file || 'index.html';
 
     const ring1Entities = [
-      { id: 'ctx_proj', type: 'system', name: 'Project', label: `Proj: ${currentProj}`, status: `Active Project Directory: ${ctx.folder || ''}`, ring: 1, color: 0x00E5FF },
-      { id: 'ctx_win', type: 'app', name: 'Active Window', label: activeWin.length > 20 ? activeWin.substring(0, 17) + '...' : activeWin, status: `Window: ${activeWin}`, ring: 1, color: 0x7DF9FF },
+      { id: 'ctx_proj', type: 'system', name: 'Project-Falso', label: `Proj: ${currentProj} (${ctx.git_branch || 'main'})`, status: `Git Branch: ${ctx.git_branch || 'main'} | ${ctx.git_uncommitted || 0} uncommitted changes`, ring: 1, color: 0x00E5FF },
+      { id: 'ctx_win', type: 'app', name: 'Active Window', label: activeWin.length > 20 ? activeWin.substring(0, 17) + '...' : activeWin, status: `Window: ${activeWin} (${ctx.running_ide || 'IDE'})`, ring: 1, color: 0x7DF9FF },
       { id: 'ctx_file', type: 'file', name: 'Active File', label: `File: ${activeFile}`, status: `Editing File: ${activeFile}`, ring: 1, color: 0x4FC3F7 }
     ];
 

@@ -1848,7 +1848,7 @@
 
             // Background non-blocking mic activation and verbal greeting
             enableMic().then(async () => {
-                const greeting = "Hello Sir. FALSO online. Systems initialized. How can I help you today?";
+                const greeting = "Hello Sir. FALSO Online. System initialized.";
                 appendMessage('system', greeting);
                 await speak(greeting);
             }).catch(e => {
