@@ -181,7 +181,7 @@ Ports: `ImageSource`, `OCREngine` (tesseract local, offload to model when better
 | Frontend | TS + esbuild static bundle, WebSocket client, Three.js (tiered), MediaPipe tasks-vision (local WASM) | Next/React (weight), Vite (ok but heavier than esbuild) |
 | Test | pytest + pytest-asyncio + vitest | — |
 | Observability | stdlib logging + OpenTelemetry (optional export) | — |
-| Models | Ollama function-calling models (`qwen2.5:3b` default, configurable) | — |
+| Models | Ollama function-calling models (`gemma3:4b` default, configurable) | — |
 
 ---
 

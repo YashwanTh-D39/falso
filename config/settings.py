@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
     # Ollama (optional local provider — used when AI_PROVIDER=ollama)
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen2.5:3b"
+    ollama_model: str = "gemma3:4b"
 
     system_prompt_path: str = "./config/system_prompt.txt"
 

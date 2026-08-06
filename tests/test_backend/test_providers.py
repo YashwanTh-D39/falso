@@ -264,7 +264,7 @@ class FakeHttpClient:
 
 class TestOllamaStreaming:
     def _provider(self) -> OllamaProvider:
-        return OllamaProvider(model="qwen2.5:3b")
+        return OllamaProvider(model="gemma3:4b")
 
     def _patch_http(self, monkeypatch, stream: FakeHttpStream) -> FakeHttpClient:
         client = FakeHttpClient(stream)
@@ -274,8 +274,8 @@ class TestOllamaStreaming:
     async def test_streams_ndjson_chunks(self, monkeypatch) -> None:
         provider = self._provider()
         stream = FakeHttpStream([
-            json.dumps({"model": "qwen2.5:3b", "message": {"content": "Hi "}, "done": False}),
-            json.dumps({"model": "qwen2.5:3b", "message": {"content": "there"}, "done": True}),
+            json.dumps({"model": "gemma3:4b", "message": {"content": "Hi "}, "done": False}),
+            json.dumps({"model": "gemma3:4b", "message": {"content": "there"}, "done": True}),
         ])
         client = self._patch_http(monkeypatch, stream)
 
@@ -283,7 +283,7 @@ class TestOllamaStreaming:
         assert chunks == [("Hi ", False), ("there", True)]
 
         request = client.last_request
-        assert request["json"]["model"] == "qwen2.5:3b"
+        assert request["json"]["model"] == "gemma3:4b"
         assert request["json"]["stream"] is True
 
     async def test_malformed_line_skipped_stream_survives(self, monkeypatch) -> None:

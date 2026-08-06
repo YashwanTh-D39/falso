@@ -10,7 +10,7 @@ Falso runs as a single process. Chat streams through **Google Gemini** (Google A
 - **Optional** — for `AI_PROVIDER=ollama`, Ollama with the model pulled:
 
   ```bash
-  ollama pull qwen2.5:3b
+  ollama pull gemma3:4b
   ```
 
 ## 1. Install
@@ -50,7 +50,7 @@ All variables are optional — the app runs out of the box with defaults. Set
 | `OPENAI_MODEL` | `gpt-5` | OpenAI model name |
 | `OPENAI_BASE_URL` | *(empty)* | Optional OpenAI-compatible gateway/proxy base URL |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama HTTP endpoint (only when `AI_PROVIDER=ollama`) |
-| `OLLAMA_MODEL` | `qwen2.5:3b` | Ollama chat model (only when `AI_PROVIDER=ollama`, must be pulled) |
+| `OLLAMA_MODEL` | `gemma3:4b` | Ollama chat model (only when `AI_PROVIDER=ollama`, must be pulled) |
 | `SYSTEM_PROMPT_PATH` | `./config/system_prompt.txt` | System prompt file; missing file = no system prompt |
 | `API_TOKEN` | *(empty)* | **Required for any non-local exposure.** Bearer token for all `/api/*` requests (constant-time comparison) |
 | `ALLOWED_ORIGINS` | `["http://localhost:8000","http://127.0.0.1:8000"]` | JSON array; cross-origin browser requests (mutating methods) are only accepted from these origins |

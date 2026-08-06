@@ -49,7 +49,7 @@ Prerequisites:
   pulled:
 
   ```bash
-  ollama pull qwen2.5:3b   # only needed if AI_PROVIDER=ollama
+  ollama pull gemma3:4b   # only needed if AI_PROVIDER=ollama
   ```
 
 Setup:
@@ -102,7 +102,7 @@ for the full table):
 | `OPENAI_MODEL` | `gpt-5` | OpenAI model name |
 | `OPENAI_BASE_URL` | *(empty)* | Optional OpenAI-compatible gateway/proxy URL |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint (only when `AI_PROVIDER=ollama`) |
-| `OLLAMA_MODEL` | `qwen2.5:3b` | Ollama model name (only when `AI_PROVIDER=ollama`) |
+| `OLLAMA_MODEL` | `gemma3:4b` | Ollama model name (only when `AI_PROVIDER=ollama`) |
 | `SYSTEM_PROMPT_PATH` | `./config/system_prompt.txt` | Assistant system prompt (core identity for the default personality) |
 | `ASSISTANT_PERSONALITY` | `default` | Personality used to build the system prompt: `default`, `technician`, `ultron`, `jarvis`, `minimal`, `friendly` |
 | `USER_LANGUAGE` / `USER_VERBOSITY` | `English` / `concise` | User preferences folded into the generated system prompt |

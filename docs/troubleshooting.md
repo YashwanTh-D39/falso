@@ -40,7 +40,7 @@ curl http://localhost:11434/api/tags
 ```
 
 If it fails, Ollama is not running — start it (`ollama serve`). Pull the
-model if missing: `ollama pull qwen2.5:3b`. In Docker, the base URL must
+model if missing: `ollama pull gemma3:4b`. In Docker, the base URL must
 point at the host (`http://host.docker.internal:11434`) — see
 [docker.md](docker.md#reaching-ollama-from-the-container).
 

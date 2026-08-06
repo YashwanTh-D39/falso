@@ -4,7 +4,7 @@ from string import Template
 
 from app.personality.base import RuntimeContext, UserPreferences
 
-DEFAULT_MODEL = "qwen2.5:3b"
+DEFAULT_MODEL = "gemma3:4b"
 
 CAPABILITY_BULLETS: dict[str, str] = {
     "time": "- Time tool — tell you the current date, time, and timezone.",
