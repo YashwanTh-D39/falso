@@ -1703,10 +1703,13 @@
       metalFilter.connect(this.metalGain);
       this.metalGain.connect(this.reverbMix);
 
-      // Start oscillators
+      // SpeechSynthesis (spoken human voice output)
+      // Note: Metallic drone oscillators are disabled so user hears clean speech instead of tone hum
+      /*
       this.drone.start(ctx.currentTime + 0.2);
       this.sub.start(ctx.currentTime + 0.3);
       this.metal.start(ctx.currentTime + 0.4);
+      */
 
       // SpeechSynthesis
       this.selectVoice();
