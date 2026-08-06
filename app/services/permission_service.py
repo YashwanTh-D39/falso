@@ -22,13 +22,54 @@ DEFAULT_ALLOWED_DIRECTORIES = [
 ]
 
 
+from enum import Enum
+
+class PermissionLevel(str, Enum):
+    READ = "READ"
+    WRITE = "WRITE"
+    EXECUTE = "EXECUTE"
+    ADMIN = "ADMIN"
+
+ADMIN_ACTIONS = {
+    "delete_file", "delete_folder", "run_terminal_command", "kill_process",
+    "install_software", "modify_system_settings", "registry_change", "format_drive"
+}
+EXECUTE_ACTIONS = {"open_app", "close_app", "launch_website", "run_script"}
+WRITE_ACTIONS = {"create_file", "create_folder", "rename_file", "copy_file", "move_file"}
+READ_ACTIONS = {"read_file", "open_file", "search_files", "open_folder", "list_files"}
+
+
 class PermissionService:
-    """Manages permissions and action confirmation tokens."""
+    """Manages permissions, audit logging, and action confirmation tokens."""
 
     def __init__(self):
         self.allowed_directories = [p for p in DEFAULT_ALLOWED_DIRECTORIES if p.exists()]
         # Token storage for pending actions: token -> {action, target_path, created_at, metadata}
         self.pending_tokens: Dict[str, Dict[str, Any]] = {}
+        self.action_logs: list[Dict[str, Any]] = []
+
+    def get_permission_level(self, action: str) -> PermissionLevel:
+        action_lower = action.lower()
+        if action_lower in ADMIN_ACTIONS:
+            return PermissionLevel.ADMIN
+        if action_lower in EXECUTE_ACTIONS:
+            return PermissionLevel.EXECUTE
+        if action_lower in WRITE_ACTIONS:
+            return PermissionLevel.WRITE
+        return PermissionLevel.READ
+
+    def log_action(self, action: str, target: str, status: str, metadata: Optional[Dict[str, Any]] = None):
+        level = self.get_permission_level(action)
+        entry = {
+            "timestamp": time.time(),
+            "action": action,
+            "level": level.value,
+            "target": target,
+            "status": status,
+            "metadata": metadata or {}
+        }
+        self.action_logs.append(entry)
+        logger.info("[SECURITY AUDIT] Action: %s | Level: %s | Target: %s | Status: %s", action, level.value, target, status)
 
     def is_path_allowed(self, target_path: str) -> bool:
         """Verifies if a given file/folder path is within an allowed directory."""
@@ -52,6 +93,7 @@ class PermissionService:
             "metadata": metadata or {},
             "created_at": time.time()
         }
+        self.log_action(action, target_path, "CONFIRMATION_REQUIRED", {"token": token})
         return token
 
     def confirm_token(self, token: str) -> Optional[Dict[str, Any]]:

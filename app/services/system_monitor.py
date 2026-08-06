@@ -136,6 +136,42 @@ class SystemMonitorService:
             except Exception:
                 self._has_nvidia = False  # Disable subsequent checks if NVML unsupported
 
+        # 6. Battery
+        battery_stats = None
+        try:
+            bat = psutil.sensors_battery()
+            if bat:
+                battery_stats = {
+                    "percent": bat.percent,
+                    "power_plugged": bat.power_plugged,
+                    "secs_left": bat.secsleft if bat.secsleft != psutil.POWER_TIME_UNLIMITED else -1
+                }
+        except Exception:
+            battery_stats = None
+
+        # 7. System Environment Context
+        active_window = "Project-Falso"
+        try:
+            import win32gui
+            hwnd = win32gui.GetForegroundWindow()
+            title = win32gui.GetWindowText(hwnd)
+            if title.strip():
+                active_window = title.strip()
+        except Exception:
+            pass
+
+        import getpass
+        import os
+        from datetime import datetime
+
+        user_info = {
+            "current_user": getpass.getuser(),
+            "cwd": os.getcwd(),
+            "project_folder": "c:/Users/Admin/Project-Falso",
+            "active_window": active_window,
+            "datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
         return {
             "timestamp": now,
             "cpu": {
@@ -148,7 +184,9 @@ class SystemMonitorService:
             "ram": ram_stats,
             "disks": partitions,
             "network": net_stats,
-            "gpus": gpu_stats
+            "gpus": gpu_stats,
+            "battery": battery_stats,
+            "user_context": user_info
         }
 
     def get_running_processes(self, limit: int = 30) -> List[Dict[str, Any]]:

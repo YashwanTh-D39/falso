@@ -96,10 +96,24 @@ class ContextDetectorService:
     def format_summary_for_prompt(self) -> str:
         """Formats active desktop context summary for system prompt context injection."""
         ctx = self.detect_context()
+        active_window = "Project-Falso"
+        try:
+            import win32gui
+            hwnd = win32gui.GetForegroundWindow()
+            t = win32gui.GetWindowText(hwnd)
+            if t.strip():
+                active_window = t.strip()
+        except Exception:
+            pass
+
+        import getpass
+        import os
+
         lines = [
+            f"Current User: {getpass.getuser()} | CWD: {os.getcwd()}",
             f"Active Project: {ctx['current_project']} ({ctx['current_folder']})",
-            f"IDE: {ctx['running_ide']} | Git Branch: {ctx['git_branch']}",
-            f"Git Uncommitted Changes: {ctx['git_uncommitted']} files"
+            f"Active Window: {active_window}",
+            f"IDE: {ctx['running_ide']} | Git Branch: {ctx['git_branch']} ({ctx['git_uncommitted']} uncommitted files)",
         ]
         return "\n".join(lines)
 
