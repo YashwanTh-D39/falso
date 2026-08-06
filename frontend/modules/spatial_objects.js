@@ -212,6 +212,13 @@ export class SpatialObjectManager {
         this.entities.delete(id);
       }
     }
+
+    // Update global telemetry counters for Debug Panel & Empty State
+    if (typeof window !== 'undefined') {
+      window.renderedEntitiesCount = activeIds.size;
+      window.lastWsUpdateTime = Date.now();
+      console.log(`[Frontend Received & Orb Rendered] ${activeIds.size} real system entities`);
+    }
   }
 
   upsertEntity(id, data) {

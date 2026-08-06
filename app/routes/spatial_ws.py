@@ -54,8 +54,55 @@ ws_manager = SpatialConnectionManager()
 async def spatial_websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:
+        # Immediately send current state snapshot frame upon connection
+        stats = system_monitor.get_system_stats()
+        processes = system_monitor.get_running_processes(limit=15)
+        recent_files = filesystem_indexer.get_recent(limit=25)
+        usb_devices = system_monitor.get_usb_devices()
+        browser_tabs = system_monitor.get_browser_tabs()
+
+        from app.services.context_detector import context_detector
+        git_ctx = context_detector.detect_context()
+
+        context_data = {
+            "project": git_ctx.get("current_project", "Project-Falso"),
+            "folder": git_ctx.get("current_folder", "c:/Users/Admin/Project-Falso"),
+            "active_window": stats.get("user_context", {}).get("active_window", "Project-Falso"),
+            "active_file": recent_files[0]["name"] if recent_files else "main.py",
+            "git_branch": git_ctx.get("git_branch", "main"),
+            "git_uncommitted": git_ctx.get("git_uncommitted", 0),
+            "running_ide": git_ctx.get("running_ide", "VS Code")
+        }
+
+        init_payload = {
+            "type": "SPATIAL_STATE_UPDATE",
+            "system": stats,
+            "context": context_data,
+            "processes": processes,
+            "browser_tabs": browser_tabs,
+            "files": recent_files,
+            "usb": usb_devices,
+            "timestamp": stats.get("timestamp")
+        }
+
+        # Step 1 & 2 Audit Logs: Log backend entity discovery
+        entity_names = [f"[ENTITY] Proj: {context_data['project']}"]
+        for p in processes[:5]:
+            entity_names.append(f"[ENTITY] Proc: {p['name']}")
+        for t in browser_tabs[:3]:
+            entity_names.append(f"[ENTITY] Tab: {t['title']}")
+        for f in ["Desktop", "Downloads", "Documents", "Pictures", "Videos", "Music", "Project-Falso"]:
+            entity_names.append(f"[ENTITY] Folder: {f}")
+        entity_names.extend(["[ENTITY] CPU", "[ENTITY] RAM", "[ENTITY] Network"])
+
+        logger.info(
+            "[SPATIAL WS] Backend generated & sent %d entities via WebSocket:\n%s",
+            len(entity_names), "\n".join(entity_names)
+        )
+
+        await websocket.send_bytes(orjson.dumps(init_payload))
+
         while True:
-            # Handle incoming ping / messages
             msg = await websocket.receive_text()
             if msg == "ping":
                 await websocket.send_text("pong")

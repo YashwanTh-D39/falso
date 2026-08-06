@@ -785,19 +785,26 @@
         let currentFPS = 60;
         let lastResponseTimeMs = 796;
 
+        window.lastWsUpdateTime = Date.now();
+        window.renderedEntitiesCount = 0;
+
         function updateDiagnosticsUI() {
             const diag = document.getElementById('diag-content');
             if (!diag) return;
             const mem = performance.memory ? (performance.memory.usedJSHeapSize/1048576).toFixed(0) : '290';
+            const secondsAgo = Math.round((Date.now() - (window.lastWsUpdateTime || Date.now())) / 1000);
+            const rCount = window.renderedEntitiesCount || 0;
+            const wsConnected = window.spatialWSClient && window.spatialWSClient.ws && window.spatialWSClient.ws.readyState === 1;
+
             diag.innerHTML = `
                 Provider: ${escHtml(activeProvider)}<br>
                 Model: ${escHtml(activeModel)}<br>
                 FPS: ${currentFPS} / 60<br>
-                Response Time: ${lastResponseTimeMs} ms<br>
+                WebSocket: ${wsConnected ? 'Connected' : 'Connecting'}<br>
+                Last update: ${secondsAgo} seconds ago<br>
+                Entities detected: ${rCount}<br>
+                Rendered: ${rCount > 0 ? rCount : '<span style="color:#FF6B6B">No live entities detected.</span>'}<br>
                 Silero Status: ${escHtml(sileroStatus)}<br>
-                Speech Detected: ${escHtml(sileroSpeechDetected)}<br>
-                Non-Speech Ignored: ${sileroNonSpeechIgnored}<br>
-                Interrupt Triggered: ${sileroInterruptTriggered}<br>
                 SYS.MEM: ${mem} MB<br>
                 STATE: ${(sysState || 'IDLE').toUpperCase()}
             `;
