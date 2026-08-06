@@ -849,18 +849,23 @@
             }
         }
 
-        // Full-Duplex Instant Interruption (<35ms Latency)
+        // Full-Duplex Instant Interruption (<150ms Latency)
         function triggerVoiceInterruption() {
-            console.log('[FULL-DUPLEX VOICE ENGINE] User voice detected mid-speech -> Halting TTS playback immediately.');
-            stopActiveAudioPlayback();
-            isSpeakingSpeech = false;
-            changeState('interrupted');
-            setTimeout(() => {
-                changeState('listening');
-                if (micActive && speechRec) {
-                    try { speechRec.start(); } catch(e) {}
-                }
-            }, 80);
+            if (sysState === 'speaking' || isSpeakingSpeech) {
+                console.log('[TTS] Interrupted by user');
+                console.log('[FULL-DUPLEX VOICE ENGINE] User voice detected mid-speech -> Halting TTS playback immediately.');
+                stopActiveAudioPlayback();
+                isSpeakingSpeech = false;
+                console.log('[TTS] Stopped');
+                changeState('interrupted');
+                setTimeout(() => {
+                    changeState('listening');
+                    console.log('[STT] Listening');
+                    if (micActive && speechRec) {
+                        try { speechRec.start(); } catch(e) {}
+                    }
+                }, 80);
+            }
         }
 
         // Auto sleep check (45s silence -> sleeping state)
@@ -945,19 +950,6 @@
 
         /* ─── Server TTS Integration & Audio Playback ─── */
         let currentAudioSource = null;
-
-        function triggerVoiceInterruption() {
-            if (sysState === 'speaking' || isSpeakingSpeech) {
-                console.log("[TTS] Interrupted by user");
-                stopActiveAudioPlayback();
-                console.log("[TTS] Stopped");
-                changeState('listening');
-                console.log("[STT] Listening");
-                if (micActive && speechRec) {
-                    try { speechRec.start(); } catch(e) {}
-                }
-            }
-        }
 
         function stopActiveAudioPlayback() {
             if (currentAudioSource) {
