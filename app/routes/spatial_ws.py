@@ -86,6 +86,14 @@ async def spatial_broadcaster_loop():
             processes = system_monitor.get_running_processes(limit=15)
             recent_files = filesystem_indexer.get_recent(limit=25)
             usb_devices = system_monitor.get_usb_devices()
+            browser_tabs = system_monitor.get_browser_tabs()
+
+            context_data = {
+                "project": "Project-Falso",
+                "folder": "c:/Users/Admin/Project-Falso",
+                "active_window": stats.get("user_context", {}).get("active_window", "Project-Falso"),
+                "active_file": recent_files[0]["name"] if recent_files else "main.py"
+            }
 
             # Construct diffable payload summary (omit exact timestamp from hash check)
             summary_state = {
@@ -96,7 +104,8 @@ async def spatial_broadcaster_loop():
                 "top_proc_cpu": processes[0]["cpu_percent"] if processes else 0,
                 "files_count": len(recent_files),
                 "top_file_mod": recent_files[0]["modified_at"] if recent_files else 0,
-                "usb_count": len(usb_devices)
+                "tabs_count": len(browser_tabs),
+                "active_win": context_data["active_window"]
             }
             
             state_bytes = orjson.dumps(summary_state)
@@ -108,7 +117,9 @@ async def spatial_broadcaster_loop():
                 payload = {
                     "type": "SPATIAL_STATE_UPDATE",
                     "system": stats,
+                    "context": context_data,
                     "processes": processes,
+                    "browser_tabs": browser_tabs,
                     "files": recent_files,
                     "usb": usb_devices,
                     "timestamp": stats.get("timestamp")

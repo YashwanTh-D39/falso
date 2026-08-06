@@ -43,99 +43,90 @@ export class SpatialObjectManager {
   syncWithState(state) {
     const activeIds = new Set();
 
-    // 1. Core Hardware Metrics (Ring 1)
-    if (state.system) {
-      const cpuId = 'hw_cpu';
-      activeIds.add(cpuId);
-      this.upsertEntity(cpuId, {
-        type: 'system',
-        name: 'CPU',
-        label: `CPU: ${state.system.cpu.total_percent}%`,
-        status: `${state.system.cpu.logical_cores} Cores | ${state.system.cpu.total_percent}% Load`,
-        ring: 1,
-        color: state.system.cpu.total_percent > 80 ? 0xEF5350 : 0x42A5F5
-      });
+    // ── RING 1: Current Active Context (Radius 1.8) ──
+    const ctx = state.context || {};
+    const currentProj = ctx.project || 'Project-Falso';
+    const activeWin = ctx.active_window || 'VS Code';
+    const activeFile = ctx.active_file || 'index.html';
 
-      const ramId = 'hw_ram';
-      activeIds.add(ramId);
-      this.upsertEntity(ramId, {
-        type: 'system',
-        name: 'RAM',
-        label: `RAM: ${state.system.ram.percent}%`,
-        status: `${(state.system.ram.used / 1073741824).toFixed(1)} / ${(state.system.ram.total / 1073741824).toFixed(1)} GB`,
-        ring: 1,
-        color: state.system.ram.percent > 85 ? 0xEF5350 : 0x66BB6A
-      });
-
-      const netId = 'hw_net';
-      activeIds.add(netId);
-      this.upsertEntity(netId, {
-        type: 'system',
-        name: 'Network',
-        label: `Net: ${(state.system.network.download_bytes_sec / (1024*1024)).toFixed(1)} MB/s`,
-        status: `Down: ${(state.system.network.download_bytes_sec / (1024*1024)).toFixed(1)} MB/s | Up: ${(state.system.network.upload_bytes_sec / (1024*1024)).toFixed(1)} MB/s`,
-        ring: 1,
-        color: 0x26A69A
-      });
-
-      // Disk Drives
-      if (state.system.disks) {
-        state.system.disks.forEach(disk => {
-          const driveId = `drive_${disk.device.replace(/[^a-zA-Z0-9]/g, '')}`;
-          activeIds.add(driveId);
-          this.upsertEntity(driveId, {
-            type: 'drive',
-            name: `${disk.mountpoint} Drive`,
-            label: `${disk.mountpoint} (${disk.percent}%)`,
-            status: `${(disk.free_bytes / (1073741824)).toFixed(0)} GB Free of ${(disk.total_bytes / (1073741824)).toFixed(0)} GB`,
-            ring: 1,
-            color: 0xB0BEC5
-          });
-        });
-      }
-    }
-
-    // 2. Core System Folders (Ring 2)
-    const defaultFolders = [
-      { id: 'dir_project_falso', name: 'Project-Falso', path: 'c:/Users/Admin/Project-Falso', status: 'Active Project Directory' },
-      { id: 'dir_downloads', name: 'Downloads', path: 'c:/Users/Admin/Downloads', status: 'User Downloads Directory' },
-      { id: 'dir_desktop', name: 'Desktop', path: 'c:/Users/Admin/Desktop', status: 'User Desktop Directory' },
-      { id: 'dir_documents', name: 'Documents', path: 'c:/Users/Admin/Documents', status: 'User Documents Directory' }
+    const ring1Entities = [
+      { id: 'ctx_proj', type: 'system', name: 'Project', label: `Proj: ${currentProj}`, status: `Active Project Directory: ${ctx.folder || ''}`, ring: 1, color: 0x00E5FF },
+      { id: 'ctx_win', type: 'app', name: 'Active Window', label: activeWin.length > 20 ? activeWin.substring(0, 17) + '...' : activeWin, status: `Window: ${activeWin}`, ring: 1, color: 0x7DF9FF },
+      { id: 'ctx_file', type: 'file', name: 'Active File', label: `File: ${activeFile}`, status: `Editing File: ${activeFile}`, ring: 1, color: 0x4FC3F7 }
     ];
 
-    defaultFolders.forEach(f => {
-      activeIds.add(f.id);
-      this.upsertEntity(f.id, {
-        type: 'folder',
-        name: f.name,
-        label: f.name,
-        path: f.path,
-        status: f.status,
-        ring: 2,
-        color: 0xFFB74D
-      });
+    ring1Entities.forEach(item => {
+      activeIds.add(item.id);
+      this.upsertEntity(item.id, item);
     });
 
-    // 3. Live Running Applications (Ring 3)
+    // ── RING 2: Running Applications (Radius 3.0) ──
     if (state.processes) {
-      state.processes.forEach((proc) => {
+      state.processes.forEach(proc => {
         const appId = `proc_${proc.pid}`;
         activeIds.add(appId);
+        let color = 0x81C784;
+        if (proc.name.includes('Chrome')) color = 0xFF5252;
+        else if (proc.name.includes('Edge')) color = 0x00B0FF;
+        else if (proc.name.includes('Code')) color = 0x29B6F6;
+        else if (proc.name.includes('Explorer')) color = 0xFFCA28;
+        else if (proc.name.includes('Terminal') || proc.name.includes('Python')) color = 0xAB47BC;
+
         this.upsertEntity(appId, {
           type: 'app',
           name: proc.name,
           label: proc.name,
           status: proc.status || `PID: ${proc.pid} | CPU: ${proc.cpu_percent}%`,
           pid: proc.pid,
-          ring: 3,
-          color: proc.name === 'Chrome' ? 0xFF5252 : proc.name === 'Explorer' ? 0xFFC107 : 0x81C784
+          ring: 2,
+          color: color
         });
       });
     }
 
-    // 4. Live Indexed Files (Ring 4)
+    // ── RING 3: Chrome / Edge Browser Context Tabs (Radius 4.2) ──
+    if (state.browser_tabs && state.browser_tabs.length > 0) {
+      state.browser_tabs.forEach((tab, idx) => {
+        const tabId = `tab_${idx}_${tab.title.replace(/[^a-zA-Z0-9]/g, '')}`;
+        activeIds.add(tabId);
+        const shortTitle = tab.title.length > 20 ? tab.title.substring(0, 17) + '...' : tab.title;
+        this.upsertEntity(tabId, {
+          type: 'app',
+          name: tab.title,
+          label: `[${tab.browser}] ${shortTitle}`,
+          status: `Browser Tab: ${tab.title}`,
+          ring: 3,
+          color: tab.browser === 'Chrome' ? 0xFF7043 : 0x26C6DA
+        });
+      });
+    }
+
+    // ── RING 4: File System Folders & Recent Files (Radius 5.4) ──
+    const systemFolders = [
+      { id: 'dir_project_falso', name: 'Project-Falso', path: 'c:/Users/Admin/Project-Falso' },
+      { id: 'dir_desktop', name: 'Desktop', path: 'c:/Users/Admin/Desktop' },
+      { id: 'dir_downloads', name: 'Downloads', path: 'c:/Users/Admin/Downloads' },
+      { id: 'dir_documents', name: 'Documents', path: 'c:/Users/Admin/Documents' },
+      { id: 'dir_pictures', name: 'Pictures', path: 'c:/Users/Admin/Pictures' },
+      { id: 'dir_videos', name: 'Videos', path: 'c:/Users/Admin/Videos' },
+      { id: 'dir_music', name: 'Music', path: 'c:/Users/Admin/Music' }
+    ];
+
+    systemFolders.forEach(f => {
+      activeIds.add(f.id);
+      this.upsertEntity(f.id, {
+        type: 'folder',
+        name: f.name,
+        label: f.name,
+        path: f.path,
+        status: `Directory: ${f.name}`,
+        ring: 4,
+        color: 0xFFB74D
+      });
+    });
+
     if (state.files) {
-      state.files.forEach((file) => {
+      state.files.slice(0, 10).forEach(file => {
         const fileId = `file_${file.path}`;
         activeIds.add(fileId);
         this.upsertEntity(fileId, {
@@ -150,7 +141,71 @@ export class SpatialObjectManager {
       });
     }
 
-    // Remove stale entities (Apps closed, files deleted)
+    // ── RING 5: Hardware Telemetry Metrics (Radius 6.6) ──
+    if (state.system) {
+      const cpuId = 'hw_cpu';
+      activeIds.add(cpuId);
+      this.upsertEntity(cpuId, {
+        type: 'system',
+        name: 'CPU',
+        label: `CPU: ${state.system.cpu.total_percent}%`,
+        status: `${state.system.cpu.logical_cores} Cores | ${state.system.cpu.total_percent}% Load`,
+        ring: 5,
+        color: state.system.cpu.total_percent > 80 ? 0xEF5350 : 0x42A5F5
+      });
+
+      const ramId = 'hw_ram';
+      activeIds.add(ramId);
+      this.upsertEntity(ramId, {
+        type: 'system',
+        name: 'RAM',
+        label: `RAM: ${state.system.ram.percent}%`,
+        status: `${(state.system.ram.used / 1073741824).toFixed(1)} / ${(state.system.ram.total / 1073741824).toFixed(1)} GB`,
+        ring: 5,
+        color: state.system.ram.percent > 85 ? 0xEF5350 : 0x66BB6A
+      });
+
+      const netId = 'hw_net';
+      activeIds.add(netId);
+      this.upsertEntity(netId, {
+        type: 'system',
+        name: 'Network',
+        label: `Net: ${(state.system.network.download_bytes_sec / (1024*1024)).toFixed(1)} MB/s`,
+        status: `Down: ${(state.system.network.download_bytes_sec / (1024*1024)).toFixed(1)} MB/s | Up: ${(state.system.network.upload_bytes_sec / (1024*1024)).toFixed(1)} MB/s`,
+        ring: 5,
+        color: 0x26A69A
+      });
+
+      if (state.system.disks) {
+        state.system.disks.forEach(disk => {
+          const driveId = `drive_${disk.device.replace(/[^a-zA-Z0-9]/g, '')}`;
+          activeIds.add(driveId);
+          this.upsertEntity(driveId, {
+            type: 'drive',
+            name: `${disk.mountpoint} Drive`,
+            label: `${disk.mountpoint} (${disk.percent}%)`,
+            status: `${(disk.free_bytes / (1073741824)).toFixed(0)} GB Free of ${(disk.total_bytes / (1073741824)).toFixed(0)} GB`,
+            ring: 5,
+            color: 0xB0BEC5
+          });
+        });
+      }
+
+      if (state.system.battery) {
+        const batId = 'hw_battery';
+        activeIds.add(batId);
+        this.upsertEntity(batId, {
+          type: 'system',
+          name: 'Battery',
+          label: `Bat: ${state.system.battery.percent}%`,
+          status: `${state.system.battery.percent}% | ${state.system.battery.power_plugged ? 'Plugged In' : 'Discharging'}`,
+          ring: 5,
+          color: 0xFFD54F
+        });
+      }
+    }
+
+    // Remove stale entities (Apps closed, files deleted, tabs closed)
     for (const [id, entity] of this.entities.entries()) {
       if (!activeIds.has(id)) {
         this.containerGroup.remove(entity.group);

@@ -267,10 +267,32 @@ class SystemMonitorService:
         # Filter out System Idle Process
         proc_list = [p for p in proc_list if p["name"].lower() not in ("system idle process", "idle")]
         proc_list.sort(key=lambda p: (p['cpu_percent'], p['memory_bytes']), reverse=True)
-        
+
         self._proc_cache = proc_list
         self._proc_cache_time = now
-        return proc_list[:limit]
+        return self._proc_cache[:limit]
+
+    def get_browser_tabs(self) -> List[Dict[str, str]]:
+        """Extracts open browser window & tab titles for Chrome and Edge."""
+        tabs = []
+        try:
+            import win32gui
+            def enum_windows_callback(hwnd, extra):
+                if win32gui.IsWindowVisible(hwnd):
+                    title = win32gui.GetWindowText(hwnd).strip()
+                    if title and len(title) > 3:
+                        if " - Google Chrome" in title or " - Chrome" in title:
+                            clean_title = title.replace(" - Google Chrome", "").replace(" - Chrome", "").strip()
+                            if clean_title and clean_title != "New Tab":
+                                tabs.append({"browser": "Chrome", "title": clean_title, "id": f"tab_chrome_{len(tabs)}"})
+                        elif " - Microsoft Edge" in title or " - Edge" in title:
+                            clean_title = title.replace(" - Microsoft Edge", "").replace(" - Edge", "").strip()
+                            if clean_title and clean_title != "New Tab":
+                                tabs.append({"browser": "Edge", "title": clean_title, "id": f"tab_edge_{len(tabs)}"})
+            win32gui.EnumWindows(enum_windows_callback, None)
+        except Exception:
+            pass
+        return tabs[:10]
 
     def get_usb_devices(self) -> List[Dict[str, Any]]:
         """Enumerates USB devices using cached WMI check."""
