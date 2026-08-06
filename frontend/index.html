@@ -668,12 +668,83 @@
             chatArea.scrollTop = chatArea.scrollHeight;
         }
 
-        // TTS
-        const TTS_MAX_CHARS = 2000; // Truncate long responses for TTS
+        /* ─── FalsoVoice Web Audio & SpeechSynthesis Fallback Engine ─── */
+        const FalsoVoice = {
+            ctx: null,
+            utt: null,
+            voiceSelected: false,
+            init() {
+                try {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch(e) {}
+            },
+            selectVoice() {
+                if (!('speechSynthesis' in window)) return;
+                const voices = speechSynthesis.getVoices();
+                if (!voices.length) return;
+                let best = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('David') || v.name.includes('Zira')));
+                if (!best) best = voices.find(v => v.lang.startsWith('en'));
+                if (!best) best = voices[0];
+                window.falsoVoiceObj = best;
+                this.voiceSelected = true;
+            },
+            speak(text) {
+                if (!text) return;
+                if (!('speechSynthesis' in window)) return;
+                this.stop();
+                changeState('speaking');
+                this.selectVoice();
+                try {
+                    speechSynthesis.cancel();
+                    const cleanText = text.length > 1000 ? text.substring(0, 1000) + '...' : text;
+                    this.utt = new SpeechSynthesisUtterance(cleanText);
+                    if (window.falsoVoiceObj) this.utt.voice = window.falsoVoiceObj;
+                    this.utt.rate = 0.95;
+                    this.utt.pitch = 0.9;
+                    this.utt.volume = 1.0;
+
+                    this.utt.onend = () => {
+                        changeState('idle');
+                        this.stop();
+                    };
+                    this.utt.onerror = () => {
+                        changeState('idle');
+                        this.stop();
+                    };
+                    speechSynthesis.speak(this.utt);
+                } catch(e) {
+                    changeState('idle');
+                    this.stop();
+                }
+            },
+            stop() {
+                try {
+                    if ('speechSynthesis' in window) speechSynthesis.cancel();
+                } catch(_) {}
+                this.utt = null;
+            }
+        };
+
+        if ('speechSynthesis' in window) {
+            speechSynthesis.getVoices();
+            speechSynthesis.onvoiceschanged = () => FalsoVoice.selectVoice();
+        }
+
+        /* ─── Server TTS Integration & Audio Playback ─── */
+        let currentAudioSource = null;
+
+        function stopActiveAudioPlayback() {
+            if (currentAudioSource) {
+                try { currentAudioSource.pause(); currentAudioSource.currentTime = 0; } catch(e) {}
+                currentAudioSource = null;
+            }
+            FalsoVoice.stop();
+        }
+
+        const TTS_MAX_CHARS = 2000;
         async function playServerTTS(text) {
             const ttsText = text.length > TTS_MAX_CHARS ? text.substring(0, TTS_MAX_CHARS) + '...' : text;
-            console.log('[TTS] playServerTTS called, text length:', text.length, '→ sending:', ttsText.length, 'chars');
-            changeState('speaking');
+            console.log('[TTS AUDIT Stage 1] Frontend calling POST /api/v1/voice/tts for text length:', ttsText.length);
             try {
                 const res = await fetch(API_BASE + '/voice/tts', {
                     method: 'POST',
@@ -681,69 +752,59 @@
                     body: JSON.stringify({ text: ttsText })
                 });
 
-                console.log('[TTS] Server response:', res.status, res.headers.get('content-type'));
-
                 if (res.ok) {
-                    const blob = await res.blob();
-                    console.log('[TTS] Audio blob received:', blob.size, 'bytes, type:', blob.type);
-
-                    if (blob.size < 100) {
-                        console.warn('[TTS] Audio blob too small (<100 bytes), likely empty. Skipping playback.');
-                        changeState('idle');
-                        return;
+                    const audioBlob = await res.blob();
+                    console.log(`[TTS AUDIT Stage 7] Frontend received ${audioBlob.size} audio bytes from backend (type: ${audioBlob.type})`);
+                    if (audioBlob.size < 100) {
+                        console.warn('[TTS AUDIT Stage 7 Warning] Backend returned empty/tiny audio bytes');
+                        return false;
                     }
-
-                    const url = URL.createObjectURL(blob);
-                    const audio = new Audio(url);
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audio = new Audio(audioUrl);
+                    currentAudioSource = audio;
+                    console.log('[TTS AUDIT Stage 8] Starting HTML5 Audio speaker playback...');
+                    changeState('speaking');
                     audio.onended = () => {
-                        console.log('[TTS] Audio playback ended.');
-                        URL.revokeObjectURL(url);
+                        console.log('[TTS AUDIT Stage 8] Audio speaker playback finished cleanly');
+                        URL.revokeObjectURL(audioUrl);
                         changeState('idle');
+                        currentAudioSource = null;
                     };
                     audio.onerror = (e) => {
-                        console.error('[TTS] Audio playback error:', e);
-                        URL.revokeObjectURL(url);
+                        console.error('[TTS AUDIT Stage 8 Failure] HTML5 Audio element error ->', e);
+                        URL.revokeObjectURL(audioUrl);
                         changeState('idle');
+                        currentAudioSource = null;
                     };
                     try {
                         await audio.play();
-                        console.log('[TTS] Audio playback started successfully.');
+                        console.log('[TTS AUDIT Stage 8 Success] Audio playing on speakers');
+                        return true;
                     } catch (playErr) {
-                        console.warn('[TTS] Autoplay blocked by browser:', playErr.message);
-                        // Autoplay was blocked — browser requires user gesture.
-                        // Store audio for replay on next user click.
-                        window._pendingAudio = audio;
-                        window._pendingAudioUrl = url;
-                        changeState('idle');
+                        console.warn('[TTS AUDIT Stage 8 Autoplay Warning] Play failed:', playErr.message);
+                        currentAudioSource = null;
+                        return false;
                     }
                 } else {
-                    const errText = await res.text().catch(() => '');
-                    console.error('[TTS] Server error:', res.status, errText);
-                    changeState('idle');
+                    console.error(`[TTS AUDIT Stage 1 Failure] Backend /voice/tts returned HTTP status ${res.status}`);
                 }
             } catch (e) {
-                console.error('[TTS] Fetch error:', e);
-                changeState('idle');
+                console.warn('[TTS AUDIT Stage 1 Failure] Fetch /voice/tts network exception ->', e);
             }
+            return false;
         }
 
-        function speak(text) {
+        async function speak(text) {
             if (!text || text.trim().length === 0) return;
-            playServerTTS(text);
-        }
+            console.log('[VOICE PIPELINE] Stage 6: Gemini response received -> preparing speech output');
+            stopActiveAudioPlayback();
 
-        // Auto-resume blocked audio on any user click
-        document.addEventListener('click', () => {
-            if (window._pendingAudio) {
-                window._pendingAudio.play().then(() => {
-                    console.log('[TTS] Resumed blocked audio on user click.');
-                    changeState('speaking');
-                    window._pendingAudio = null;
-                    URL.revokeObjectURL(window._pendingAudioUrl);
-                    window._pendingAudioUrl = null;
-                }).catch(() => {});
+            const playedServer = await playServerTTS(text);
+            if (!playedServer) {
+                console.log('[VOICE PIPELINE] Stage 8: Falling back to browser SpeechSynthesis FalsoVoice');
+                FalsoVoice.speak(text);
             }
-        }, { once: false });
+        }
 
         // STT Web Speech
         function initSpeechRecognition() {
@@ -777,6 +838,7 @@
         }
 
         async function enableMic() {
+            stopActiveAudioPlayback();
             if (!speechRec) speechRec = initSpeechRecognition();
             if (speechRec) {
                 try {
