@@ -66,6 +66,8 @@ async def get_settings():
 
     return {
         "ai_provider": settings.ai_provider,
+        "ollama_model": settings.ollama_model,
+        "ollama_base_url": settings.ollama_base_url,
         "gemini_model": settings.gemini_model,
         "gemini_api_key_configured": gem_key_valid,
         "gemini_api_key_masked": gem_masked,
@@ -287,10 +289,21 @@ async def discover_models():
 
 @router.post("/test-connection")
 async def test_connection():
-    """Test connection to active Gemini API key."""
+    """Test connection to active AI provider."""
     import httpx
 
     from config.settings import settings
+
+    if settings.ai_provider == "ollama":
+        try:
+            url = f"{settings.ollama_base_url.rstrip('/')}/api/tags"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return {"status": "ok", "message": f"Successfully connected to Ollama ({settings.ollama_model})"}
+                return {"status": "error", "message": "Local model unavailable."}
+        except Exception:  # noqa: BLE001
+            return {"status": "error", "message": "Local model unavailable."}
 
     key = settings.gemini_api_key
     if not key:

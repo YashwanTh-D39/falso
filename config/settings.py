@@ -21,10 +21,10 @@ class Settings(BaseSettings):
     # Backend that powers free-form chat. The UI and Brain service are
     # provider-agnostic: this value selects which class the provider factory
     # instantiates. Options:
-    #   gemini  (default — Google AI Studio / Gemini API)
-    #   ollama  (optional — local Ollama)
+    #   ollama  (default — local Ollama)
+    #   gemini  (optional — Google AI Studio / Gemini API)
     #   openai  (optional — OpenAI, cloud)
-    ai_provider: str = "gemini"
+    ai_provider: str = "ollama"
     ai_timeout_seconds: float = Field(default=300.0, gt=0.0)
     ai_max_retries: int = Field(default=3, ge=0)
     # Maximum number of conversation history messages forwarded to the LLM.

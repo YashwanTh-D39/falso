@@ -42,7 +42,6 @@ class BrainService:
         # AI provider is injected so tests can stub it; production uses the
         # factory, which already resolves `AI_PROVIDER` from settings.
         self.provider = provider or build_provider(settings)
-        self.model = self.provider.model
         self.tool_manager = ToolManager()
         self.personality_engine = personality_engine or PersonalityEngine(
             core_prompt=self._load_system_prompt(),
@@ -56,6 +55,10 @@ class BrainService:
         self.last_first_token_latency: float = 0.0
         self.last_tool_latency: float = 0.0
         self.last_memory_latency: float = 0.0
+
+    @property
+    def model(self) -> str:
+        return self.provider.model
 
     def _load_system_prompt(self) -> str | None:
         try:
@@ -256,9 +259,11 @@ class BrainService:
             # Provider failures are user-safe and should not kill the reply:
             # surface them as an error line inside the stream instead.
             logger.warning("%s provider error: %s", self.provider.name, e)
-            yield json.dumps({"error": str(e)}) + "\n"
+            err_msg = "Local model unavailable." if self.provider.name == "ollama" else str(e)
+            yield json.dumps({"error": err_msg}) + "\n"
         except Exception as e:
             # Keep the stream alive with an error line instead of aborting
             # mid-response with no explanation.
             logger.exception("Unexpected error streaming from provider %s", self.provider.name)
-            yield json.dumps({"error": f"{self.provider.name} error: {e}"}) + "\n"
+            err_msg = "Local model unavailable." if self.provider.name == "ollama" else f"{self.provider.name} error: {e}"
+            yield json.dumps({"error": err_msg}) + "\n"

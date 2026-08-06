@@ -59,7 +59,7 @@ build = {
 
 def build_provider(settings: Any) -> BaseAIProvider:
     """Instantiate the provider named by ``settings.ai_provider``."""
-    name = (getattr(settings, "ai_provider", "gemini") or "gemini").strip().lower() or "gemini"
+    name = (getattr(settings, "ai_provider", "ollama") or "ollama").strip().lower() or "ollama"
     factory: Callable[[Any], BaseAIProvider] | None = build.get(name)
     if factory is None:
         raise UnknownProviderError(

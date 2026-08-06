@@ -424,9 +424,11 @@
         <div id="diagnostics" class="hud-panel">
             <div class="panel-header">DIAGNOSTICS</div>
             <div id="diag-content">
+                Provider:<br>
+                Ollama<br><br>
+                Model:<br>
+                gemma3:4b<br><br>
                 SYS.MEM: 1024 MB<br>
-                LATENCY: 42 ms<br>
-                UPTIME: 00:00:00<br>
                 STATE: IDLE
             </div>
         </div>
@@ -442,8 +444,9 @@
             <div class="form-group">
                 <label>AI PROVIDER</label>
                 <select id="set-provider">
-                    <option value="gemini">Gemini</option>
-                    <option value="openai">OpenAI</option>
+                    <option value="ollama">Ollama (Local Default)</option>
+                    <option value="gemini">Gemini (Cloud)</option>
+                    <option value="openai">OpenAI (Cloud)</option>
                 </select>
             </div>
             <div class="form-group">
@@ -666,8 +669,12 @@
                                 changeState('speaking');
                                 chatArea.scrollTop = chatArea.scrollHeight;
                             } else if (data.done) {
-                                const modelName = data.model || '';
-                                if (modelName) document.querySelector('.sysid').innerHTML = 'FALSO // ' + escHtml(modelName.toUpperCase().replace(':','')) + '<br>AI CORE ONLINE';
+                                const modelName = data.model || activeModel;
+                                if (modelName) {
+                                    activeModel = modelName;
+                                    document.querySelector('.sysid').innerHTML = 'FALSO // ' + escHtml(modelName.toUpperCase().replace(':','')) + '<br>AI CORE ONLINE';
+                                    updateDiagnosticsUI();
+                                }
                             } else if (data.error) {
                                 fullResponse += 'Error: ' + data.error;
                                 msgDiv.innerHTML += `<br><span style="color:#FF6B6B">Error: ${data.error}</span>`;
@@ -704,17 +711,20 @@
         window.wakeWordMode = false;
         window.wakeWords = ["hey falso", "falso", "ok falso"];
 
+        let activeProvider = "Ollama";
+        let activeModel = "gemma3:4b";
+
+        function updateDiagnosticsUI() {
+            const diag = document.getElementById('diag-content');
+            if (!diag) return;
+            const mem = performance.memory ? (performance.memory.usedJSHeapSize/1048576).toFixed(0) : '1024';
+            diag.innerHTML = `Provider:<br>${escHtml(activeProvider)}<br><br>Model:<br>${escHtml(activeModel)}<br><br>SYS.MEM: ${mem} MB<br>STATE: ${(sysState || 'IDLE').toUpperCase()}`;
+        }
+
         function changeState(newState) {
             sysState = newState;
             window.orbState = newState;
-            const diag = document.getElementById('diag-content');
-            if (diag) {
-                diag.innerHTML = `
-                    SYS.MEM: ${(performance.memory ? (performance.memory.usedJSHeapSize/1048576).toFixed(0) : '1024')} MB<br>
-                    LATENCY: 12 ms<br>
-                    STATE: ${newState.toUpperCase()}
-                `;
-            }
+            updateDiagnosticsUI();
             const statusPill = document.getElementById('mic-status-pill');
             if (statusPill) {
                 if (newState === 'listening') {
@@ -1171,8 +1181,13 @@
                 const res = await fetch(API_BASE + '/system/settings');
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.ai_provider) document.getElementById('set-provider').value = data.ai_provider;
-                    if (data.gemini_model) document.getElementById('set-model').value = data.gemini_model;
+                    if (data.ai_provider) {
+                        document.getElementById('set-provider').value = data.ai_provider;
+                        activeProvider = data.ai_provider === 'ollama' ? 'Ollama' : (data.ai_provider === 'gemini' ? 'Gemini' : data.ai_provider.toUpperCase());
+                        activeModel = data.ai_provider === 'ollama' ? (data.ollama_model || 'gemma3:4b') : (data.gemini_model || 'gemini-3.6-flash');
+                        updateDiagnosticsUI();
+                    }
+                    if (data.gemini_model && data.ai_provider === 'gemini') document.getElementById('set-model').value = data.gemini_model;
                     if (data.tts_provider) document.getElementById('set-tts-provider').value = data.tts_provider;
                     if (data.gemini_api_key_configured) document.getElementById('set-key').placeholder = 'Configured (' + data.gemini_api_key_masked + ')';
                     if (data.elevenlabs_api_key_configured) document.getElementById('set-el-key').placeholder = 'Configured (' + data.elevenlabs_api_key_masked + ')';
@@ -1198,14 +1213,7 @@
 
         // Memory stats update interval
         setInterval(() => {
-            const diag = document.getElementById('diag-content');
-            if (diag && performance.memory) {
-                diag.innerHTML = `
-                    SYS.MEM: ${(performance.memory.usedJSHeapSize/1048576).toFixed(0)} MB<br>
-                    LATENCY: 12 ms<br>
-                    STATE: ${sysState.toUpperCase()}
-                `;
-            }
+            updateDiagnosticsUI();
         }, 2500);
 
 
