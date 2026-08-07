@@ -520,6 +520,14 @@
                     <option value="0.85">0.85 (High Precision)</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label>VOICE MODE</label>
+                <select id="set-voice-mode" onchange="updateVoiceMode(this.value)">
+                    <option value="voice_only" selected>Voice Only (Default - Hands Free)</option>
+                    <option value="voice_transcript">Voice + Transcript</option>
+                    <option value="chat_mode">Chat Mode (Full Text UI)</option>
+                </select>
+            </div>
             <button onclick="saveSettings()">SAVE CONFIG</button>
             <button onclick="testConnection()">TEST CONN</button>
             <button onclick="testVoice()">TEST VOICE</button>
@@ -543,8 +551,8 @@
 
         <div id="proactive-toast-container" style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:250;display:flex;flex-direction:column;gap:8px;pointer-events:none;"></div>
 
-        <div id="chat-area">
-            <!-- Messages will appear here -->
+        <div id="chat-area" style="display:none;">
+            <!-- Messages stored internally for transcript -->
         </div>
 
         <div id="toolIndicator" style="display:none;font-size:11px;color:#7DF9FF;text-align:center;margin-bottom:6px"></div>
@@ -566,6 +574,7 @@
         </div>
 
         <div id="hud-controls">
+            <button id="btn-transcript-toggle" onclick="toggleTranscript()">TRANSCRIPT</button>
             <button onclick="togglePanel('archive-panel')">ARCHIVE</button>
             <button onclick="togglePanel('settings-panel')">SETTINGS</button>
             <button id="btn-reset-cam">RESET CAM</button>
@@ -677,14 +686,22 @@
 
         // Chat Streaming
         async function sendToFalso(text) {
+            const lowerText = text.toLowerCase().trim();
+            if (lowerText.includes("show transcript") || lowerText.includes("show response")) {
+                toggleTranscript();
+                return;
+            }
+
             appendMessage('user', text);
             changeState('thinking');
-            
+            clearAudioStreamingQueue();
+            stopActiveAudioPlayback();
+
             const chatArea = document.getElementById('chat-area');
             const msgDiv = document.createElement('div');
             msgDiv.className = 'message system';
             chatArea.appendChild(msgDiv);
-            
+
             let fullResponse = "";
             const reqStartTime = performance.now();
             let firstChunkReceived = false;
@@ -708,10 +725,10 @@
                         lastResponseTimeMs = Math.round(performance.now() - reqStartTime);
                         updateDiagnosticsUI();
                     }
-                    
+
                     const chunk = decoder.decode(value, { stream: true });
                     const lines = chunk.split('\n').filter(l => l.trim() !== '');
-                    
+
                     for (const line of lines) {
                         try {
                             const data = JSON.parse(line);
@@ -731,9 +748,10 @@
                             } else if (data.response) {
                                 fullResponse += data.response;
                                 msgDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
-                                changeState('speaking');
                                 chatArea.scrollTop = chatArea.scrollHeight;
+                                processIncomingTokenStream(data.response);
                             } else if (data.done) {
+                                finalizeIncomingTokenStream();
                                 const modelName = data.model || activeModel;
                                 if (modelName) {
                                     activeModel = modelName;
@@ -748,12 +766,6 @@
                         } catch(e) { console.error("Parse err", e, line); }
                     }
                 }
-                
-                changeState('idle');
-                if (fullResponse) {
-                    speak(fullResponse);
-                }
-
             } catch (err) {
                 console.error(err);
                 changeState('error');
@@ -955,10 +967,109 @@
             speechSynthesis.onvoiceschanged = () => FalsoVoice.selectVoice();
         }
 
-        /* ─── Server TTS Integration & Audio Playback ─── */
+        /* ─── Streaming Sentence Audio Queue & Low-Latency Voice First ─── */
+        let sentenceBuffer = "";
+        let audioSentenceQueue = [];
+        let isProcessingAudioQueue = false;
         let currentAudioSource = null;
+        let currentVoiceMode = localStorage.getItem('falso_voice_mode') || 'voice_only';
+
+        function updateVoiceMode(mode) {
+            currentVoiceMode = mode;
+            localStorage.setItem('falso_voice_mode', mode);
+            applyVoiceModeUI();
+        }
+
+        function applyVoiceModeUI() {
+            const chatArea = document.getElementById('chat-area');
+            const setSelect = document.getElementById('set-voice-mode');
+            if (setSelect) setSelect.value = currentVoiceMode;
+
+            if (!chatArea) return;
+            if (currentVoiceMode === 'voice_only') {
+                chatArea.style.display = 'none';
+            } else if (currentVoiceMode === 'voice_transcript') {
+                chatArea.style.display = 'flex';
+                chatArea.style.opacity = '0.7';
+            } else { // chat_mode
+                chatArea.style.display = 'flex';
+                chatArea.style.opacity = '1.0';
+            }
+        }
+
+        function toggleTranscript() {
+            const chatArea = document.getElementById('chat-area');
+            if (!chatArea) return;
+            if (chatArea.style.display === 'none' || chatArea.style.display === '') {
+                chatArea.style.display = 'flex';
+                chatArea.style.opacity = '0.95';
+            } else {
+                if (currentVoiceMode === 'voice_only') {
+                    chatArea.style.display = 'none';
+                }
+            }
+        }
+
+        function clearAudioStreamingQueue() {
+            sentenceBuffer = "";
+            audioSentenceQueue = [];
+            isProcessingAudioQueue = false;
+        }
+
+        function processIncomingTokenStream(tokenText) {
+            sentenceBuffer += tokenText;
+
+            // Extract completed sentences ending in . ! ? or newline
+            const match = sentenceBuffer.match(/([^.!?\n]+[.!?\n]+)/);
+            if (match) {
+                const completeSentence = match[0];
+                sentenceBuffer = sentenceBuffer.substring(completeSentence.length);
+                enqueueSentenceForTTS(completeSentence);
+            }
+        }
+
+        function finalizeIncomingTokenStream() {
+            if (sentenceBuffer.trim().length > 0) {
+                enqueueSentenceForTTS(sentenceBuffer);
+                sentenceBuffer = "";
+            }
+        }
+
+        function enqueueSentenceForTTS(sentenceText) {
+            const clean = cleanTextForSpeech(sentenceText);
+            if (!clean || clean.trim().length === 0) return;
+            audioSentenceQueue.push(clean);
+            if (!isProcessingAudioQueue) {
+                playNextSentenceInQueue();
+            }
+        }
+
+        async function playNextSentenceInQueue() {
+            if (audioSentenceQueue.length === 0) {
+                isProcessingAudioQueue = false;
+                if (sysState === 'speaking') {
+                    setTimeout(() => {
+                        if (!isProcessingAudioQueue && audioSentenceQueue.length === 0) {
+                            changeState('listening');
+                            if (micActive && speechRec) { try { speechRec.start(); } catch(e) {} }
+                        }
+                    }, 300);
+                }
+                return;
+            }
+
+            isProcessingAudioQueue = true;
+            changeState('speaking');
+            const nextSentence = audioSentenceQueue.shift();
+
+            const played = await playServerTTS(nextSentence);
+            if (!played) {
+                playNextSentenceInQueue();
+            }
+        }
 
         function stopActiveAudioPlayback() {
+            clearAudioStreamingQueue();
             if (currentAudioSource) {
                 try { currentAudioSource.pause(); currentAudioSource.currentTime = 0; } catch(e) {}
                 currentAudioSource = null;
@@ -967,11 +1078,17 @@
             isSpeakingSpeech = false;
         }
 
+        function triggerVoiceInterruption() {
+            stopActiveAudioPlayback();
+            changeState('listening');
+            console.log("[VoiceInterruption] Interrupted spoken response < 300ms");
+        }
+
         const TTS_MAX_CHARS = 2000;
         async function playServerTTS(text) {
             const ttsText = text.length > TTS_MAX_CHARS ? text.substring(0, TTS_MAX_CHARS) + '...' : text;
             isSpeakingSpeech = true;
-            console.log("[TTS] Started");
+            console.log("[TTS Stream Sentence] Started:", ttsText);
             try {
                 const res = await fetch(API_BASE + '/voice/tts', {
                     method: 'POST',
@@ -980,15 +1097,9 @@
                 });
 
                 if (res.ok) {
-                    const providerHeader = res.headers.get('X-TTS-Provider');
-                    const contentType = res.headers.get('Content-Type');
-                    const provider = providerHeader || (contentType && contentType.includes('mpeg') ? 'ElevenLabs' : 'Local TTS');
-                    console.log(`[TTS] ${provider}`);
-
                     const audioBlob = await res.blob();
                     if (audioBlob.size < 100) {
                         isSpeakingSpeech = false;
-                        console.log("[TTS] Stopped");
                         return false;
                     }
                     const audioUrl = URL.createObjectURL(audioBlob);
@@ -999,33 +1110,22 @@
                         URL.revokeObjectURL(audioUrl);
                         currentAudioSource = null;
                         isSpeakingSpeech = false;
-                        console.log("[TTS] Stopped");
                         lastSpeechTime = Date.now();
-                        setTimeout(() => {
-                            changeState('listening');
-                            console.log("[STT] Listening");
-                            if (micActive && speechRec) { try { speechRec.start(); } catch(e) {} }
-                        }, 150);
+                        playNextSentenceInQueue();
                     };
-                    audio.onerror = (e) => {
+                    audio.onerror = () => {
                         URL.revokeObjectURL(audioUrl);
                         currentAudioSource = null;
                         isSpeakingSpeech = false;
-                        console.log("[TTS] Stopped");
-                        setTimeout(() => {
-                            changeState('listening');
-                            console.log("[STT] Listening");
-                            if (micActive && speechRec) { try { speechRec.start(); } catch(e) {} }
-                        }, 150);
+                        playNextSentenceInQueue();
                     };
                     try {
                         await audio.play();
                         return true;
                     } catch (playErr) {
-                        console.warn('[TTS] HTML5 Audio play warning:', playErr.message);
+                        console.warn('[TTS] Audio play warning:', playErr.message);
                         currentAudioSource = null;
                         isSpeakingSpeech = false;
-                        console.log("[TTS] Stopped");
                         return false;
                     }
                 }
@@ -1033,7 +1133,6 @@
                 console.warn('[TTS] Server TTS fetch exception:', e);
             }
             isSpeakingSpeech = false;
-            console.log("[TTS] Stopped");
             return false;
         }
 
