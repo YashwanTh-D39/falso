@@ -15,10 +15,20 @@ export class SpatialObjectManager {
     this.containerGroup.name = 'SpatialOSObjects';
     this.scene.add(this.containerGroup);
 
-    // Map: objectId -> SpatialEntity
     this.entities = new Map();
-
+    this.materialCache = new Map();
     this.initSharedResources();
+  }
+
+  ensureFallbackEntities() {
+    if (this.entities.size === 0) {
+      console.log('[SpatialOS] Zero backend entities available -> Rendering fallback system entities');
+      const fallbacks = [
+        { id: 'fallback_core', type: 'system', name: 'FALSO Core', label: 'FALSO Core (Waiting...)', status: 'Waiting for live system entities...', ring: 1, color: 0x00E5FF },
+        { id: 'fallback_sys', type: 'app', name: 'System Monitor', label: 'System Monitor', status: 'Connecting to Spatial WS...', ring: 2, color: 0x29B6F6 }
+      ];
+      fallbacks.forEach(item => this.upsertEntity(item.id, item));
+    }
   }
 
   initSharedResources() {

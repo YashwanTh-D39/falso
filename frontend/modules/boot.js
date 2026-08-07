@@ -26,48 +26,71 @@ class BootManager {
     this.initialized = true;
 
     console.log('[FALSO Boot Sequence] Initializing single modular boot pipeline...');
+    try {
+      // 1. Settings
+      console.log('[FALSO Boot Step 1/8] Initializing Settings...');
+      settingsManager.init();
 
-    // 1. Settings
-    settingsManager.init();
+      // 2. Three.js Scene, Camera, & Renderer
+      console.log('[FALSO Boot Step 2/8] Initializing Renderer, Scene & Camera...');
+      rendererManager.init();
+      if (!rendererManager.scene || !rendererManager.camera || !rendererManager.renderer) {
+        throw new Error('Three.js scene/camera/renderer initialization failed');
+      }
 
-    // 2. Renderer & Orb
-    rendererManager.init();
-    orbManager.init();
+      // 3. OrbManager Instantiation & Attachment
+      console.log('[FALSO Boot Step 3/8] Initializing Living Orb Manager...');
+      orbManager.init();
+      if (!orbManager.orbGroup) {
+        throw new Error('OrbManager orbGroup failed to attach to scene');
+      }
 
-    // 3. Spatial 3D Objects & WebSocket
-    this.spatialObjectManager = new SpatialObjectManager(rendererManager.scene, rendererManager.THREE);
-    window.spatialObjectManager = this.spatialObjectManager;
+      // 4. Spatial 3D Objects Manager & Fallback Entities
+      console.log('[FALSO Boot Step 4/8] Initializing Spatial Object Manager...');
+      this.spatialObjectManager = new SpatialObjectManager(rendererManager.scene, rendererManager.THREE);
+      window.spatialObjectManager = this.spatialObjectManager;
+      this.spatialObjectManager.ensureFallbackEntities();
 
-    this.spatialWSClient = new SpatialWSClient((payload) => {
-      this.spatialObjectManager.syncWithState(payload);
-    });
-    window.spatialWSClient = this.spatialWSClient;
+      // 5. WebSocket Connection & Packet Listener
+      console.log('[FALSO Boot Step 5/8] Connecting Spatial Telemetry WebSocket...');
+      this.spatialWSClient = new SpatialWSClient((payload) => {
+        console.log('[SPATIAL WS] Entity packet received:', payload ? Object.keys(payload) : null);
+        if (this.spatialObjectManager) {
+          this.spatialObjectManager.syncWithState(payload);
+        }
+      });
+      window.spatialWSClient = this.spatialWSClient;
 
-    // 4. Voice & Chat Managers
-    this.voiceManager = new VoiceManager(orbManager, settingsManager);
-    this.chatManager = new ChatManager(this.voiceManager, settingsManager);
+      // 6. Voice & Chat Managers
+      console.log('[FALSO Boot Step 6/8] Initializing Voice & Chat Managers...');
+      this.voiceManager = new VoiceManager(orbManager, settingsManager);
+      this.chatManager = new ChatManager(this.voiceManager, settingsManager);
 
-    // Make available globally for click/HUD events
-    window.voiceManager = this.voiceManager;
-    window.chatManager = this.chatManager;
-    window.settingsManager = settingsManager;
+      window.voiceManager = this.voiceManager;
+      window.chatManager = this.chatManager;
+      window.settingsManager = settingsManager;
 
-    // 5. UI Event Listeners
-    this.setupEventListeners();
+      // 7. UI Listeners & Speech Recognition
+      console.log('[FALSO Boot Step 7/8] Setting up UI & Speech Listeners...');
+      this.setupEventListeners();
+      this.voiceManager.initSpeechRecognition((cleanText) => {
+        this.chatManager.sendToFalso(cleanText);
+      });
+      this.voiceManager.requestMicPermission();
 
-    // 6. Voice Recognition
-    this.voiceManager.initSpeechRecognition((cleanText) => {
-      this.chatManager.sendToFalso(cleanText);
-    });
+      // 8. Animation Loop
+      console.log('[FALSO Boot Step 8/8] Starting Unified Animation Loop...');
+      this.startAnimationLoop();
 
-    // 7. Request Mic Access
-    this.voiceManager.requestMicPermission();
-
-    // 8. Start Unified Animation Loop
-    this.startAnimationLoop();
-
-    this.voiceManager.changeState('idle');
-    console.log('[FALSO Boot Sequence] Single boot complete -> Systems online!');
+      this.voiceManager.changeState('idle');
+      console.log('[FALSO Boot Sequence] All 8 boot steps completed successfully!');
+    } catch (bootErr) {
+      console.error('[FALSO Boot Failure]', bootErr);
+      const diag = document.getElementById('diag-content');
+      if (diag) {
+        diag.innerHTML = `<span style="color:#FF5252"><strong>BOOT ERROR:</strong> ${bootErr.message}</span>`;
+      }
+    }
   }
 
   setupEventListeners() {

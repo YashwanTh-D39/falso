@@ -42,7 +42,7 @@ export class DiagnosticsManager {
       Frame time: ${frameTimeMs} ms<br>
       WebSocket: ${wsConnected ? 'Connected' : 'Connecting'}<br>
       Backend entities: ${rCount}<br>
-      Rendered entities: ${rCount > 0 ? rCount : '<span style="color:#FFA726">No live entities available.</span>'}<br>
+      Rendered entities: ${rCount > 0 ? rCount : '<span style="color:#FFA726">Waiting for live system entities...</span>'}<br>
       TTS state: ${isSpeakingSpeech ? 'SPEAKING' : 'IDLE'}<br>
       STT state: ${micActive ? 'LISTENING' : 'OFF'}<br>
       Last update: ${secondsAgo}s ago<br>
