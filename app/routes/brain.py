@@ -13,6 +13,7 @@ brain_service = BrainService()
 
 
 @router.post("/chat")
+@router.post("/chat/stream")
 async def chat(request: ChatRequest):
     try:
         brain_service.validate_prompt(request.prompt)

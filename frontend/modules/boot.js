@@ -114,6 +114,7 @@ class BootManager {
         }
       });
       window.spatialWSClient = this.spatialWSClient;
+      this.spatialWSClient.connect();
 
       // 7. Voice & Chat Managers (Non-blocking)
       this.voiceManager = new VoiceManager(orbManager, settingsManager);
