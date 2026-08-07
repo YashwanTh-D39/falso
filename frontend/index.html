@@ -1078,11 +1078,7 @@
             isSpeakingSpeech = false;
         }
 
-        function triggerVoiceInterruption() {
-            stopActiveAudioPlayback();
-            changeState('listening');
-            console.log("[VoiceInterruption] Interrupted spoken response < 300ms");
-        }
+
 
         const TTS_MAX_CHARS = 2000;
         async function playServerTTS(text) {
