@@ -870,20 +870,20 @@
 
         // Full-Duplex Instant Interruption (<150ms Latency)
         function triggerVoiceInterruption() {
-            if (sysState === 'speaking' || isSpeakingSpeech) {
+            if (sysState === 'speaking' || isSpeakingSpeech || audioSentenceQueue.length > 0) {
                 console.log('[TTS] Interrupted by user');
                 console.log('[FULL-DUPLEX VOICE ENGINE] User voice detected mid-speech -> Halting TTS playback immediately.');
                 stopActiveAudioPlayback();
+                clearAudioStreamingQueue();
                 isSpeakingSpeech = false;
+                isProcessingAudioQueue = false;
                 console.log('[TTS] Stopped');
                 changeState('interrupted');
                 setTimeout(() => {
                     changeState('listening');
                     console.log('[STT] Listening');
-                    if (micActive && speechRec) {
-                        try { speechRec.start(); } catch(e) {}
-                    }
-                }, 80);
+                    ensureSpeechRecognitionActive();
+                }, 50);
             }
         }
 
@@ -1229,6 +1229,16 @@
             await enableMic();
         };
 
+        function ensureSpeechRecognitionActive() {
+            if (!micActive || !speechRec || isRecStarting) return;
+            try {
+                isRecStarting = true;
+                speechRec.start();
+            } catch (e) {
+                isRecStarting = false;
+            }
+        }
+
         function initSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
@@ -1250,7 +1260,7 @@
 
             speechRec.onspeechstart = () => {
                 console.log('[VAD] Human voice detected');
-                if (sysState === 'speaking' || isSpeakingSpeech) {
+                if (sysState === 'speaking' || isSpeakingSpeech || audioSentenceQueue.length > 0) {
                     console.log('[TTS] Interrupted');
                     triggerVoiceInterruption();
                 } else if (sysState === 'idle' || sysState === 'sleeping') {
@@ -1274,9 +1284,11 @@
                 if (clean) {
                     console.log('[STT] Recognizing:', clean);
                     lastSpeechTime = Date.now();
-                    if (sysState !== 'speaking' && sysState !== 'thinking') {
-                        sendToFalso(clean);
+                    if (sysState === 'speaking' || isSpeakingSpeech || audioSentenceQueue.length > 0) {
+                        console.log('[FULL-DUPLEX] Mid-speech interruption detected -> Triggering instant barge-in');
+                        triggerVoiceInterruption();
                     }
+                    sendToFalso(clean);
                 }
             };
 
@@ -1289,14 +1301,14 @@
 
             speechRec.onend = () => {
                 isRecStarting = false;
-                if (micActive && sysState !== 'speaking' && sysState !== 'booting') {
+                if (micActive) {
                     setTimeout(() => {
-                        startSpeechRecognition();
-                    }, 300);
+                        ensureSpeechRecognitionActive();
+                    }, 100);
                 }
             };
 
-            startSpeechRecognition();
+            ensureSpeechRecognitionActive();
         }
 
         function startSpeechRecognition() {
