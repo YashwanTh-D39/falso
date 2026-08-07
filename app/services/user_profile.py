@@ -36,7 +36,9 @@ DEFAULT_PROFILE: Dict[str, Any] = {
     "goals": [
         "Build FALSO Spatial AI Companion",
         "Optimize local LLM voice response latency"
-    ]
+    ],
+    "preferred_city": "Visakhapatnam",
+    "interaction_mode": "voice_only"
 }
 
 

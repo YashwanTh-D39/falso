@@ -521,11 +521,11 @@
                 </select>
             </div>
             <div class="form-group">
-                <label>VOICE MODE</label>
-                <select id="set-voice-mode" onchange="updateVoiceMode(this.value)">
+                <label>INTERACTION MODE</label>
+                <select id="set-interaction-mode" onchange="updateInteractionMode(this.value)">
                     <option value="voice_only" selected>Voice Only (Default - Hands Free)</option>
-                    <option value="voice_transcript">Voice + Transcript</option>
-                    <option value="chat_mode">Chat Mode (Full Text UI)</option>
+                    <option value="display_mode">Display Mode (Full Text & Code UI)</option>
+                    <option value="automatic_mode">Automatic Mode (Adaptive Context UI)</option>
                 </select>
             </div>
             <button onclick="saveSettings()">SAVE CONFIG</button>
@@ -570,7 +570,7 @@
         </div>
 
         <div id="hud-hints">
-            [CMD+S] Settings | [CMD+A] Archive | [ESC] Reset View
+            [CMD+D] Mode | [CMD+S] Settings | [CMD+A] Archive | [ESC] Reset View
         </div>
 
         <div id="hud-controls">
@@ -687,9 +687,28 @@
         // Chat Streaming
         async function sendToFalso(text) {
             const lowerText = text.toLowerCase().trim();
-            if (lowerText.includes("show transcript") || lowerText.includes("show response") || lowerText.includes("show the answer") || lowerText.includes("display the response")) {
-                toggleTranscript();
+
+            // Voice Mode Commands
+            if (lowerText.includes("voice mode") || lowerText.includes("enable voice only") || lowerText.includes("go to voice mode") || lowerText.includes("hide the display") || lowerText.includes("dont show it") || lowerText.includes("don't show it") || lowerText.includes("hide transcript") || lowerText.includes("hide the transcript")) {
+                updateInteractionMode('voice_only');
+                speak("Switched to Voice Only mode.");
                 return;
+            }
+            if (lowerText.includes("display mode") || lowerText.includes("enter display mode") || lowerText.includes("show the conversation") || lowerText.includes("show transcript") || lowerText.includes("show response") || lowerText.includes("show the answer") || lowerText.includes("display the response") || lowerText.includes("show it")) {
+                updateInteractionMode('display_mode');
+                speak("Switched to Display Mode.");
+                return;
+            }
+            if (lowerText.includes("automatic mode") || lowerText.includes("enable automatic mode") || lowerText.includes("auto mode")) {
+                updateInteractionMode('automatic_mode');
+                speak("Switched to Automatic Mode.");
+                return;
+            }
+
+            // Automatic Mode adaptive UI check
+            const isCodeOrArtifactQuery = /code|script|create|python|html|javascript|function|explain|error|summary|pdf|image|generate|table/i.test(lowerText);
+            if (currentInteractionMode === 'automatic_mode') {
+                applyInteractionModeUI(isCodeOrArtifactQuery);
             }
 
             appendMessage('user', text);
@@ -972,28 +991,39 @@
         let audioSentenceQueue = [];
         let isProcessingAudioQueue = false;
         let currentAudioSource = null;
-        let currentVoiceMode = localStorage.getItem('falso_voice_mode') || 'voice_only';
+        let currentInteractionMode = localStorage.getItem('falso_interaction_mode') || 'voice_only';
 
-        function updateVoiceMode(mode) {
-            currentVoiceMode = mode;
-            localStorage.setItem('falso_voice_mode', mode);
-            applyVoiceModeUI();
+        function updateInteractionMode(mode, saveToBackend = true) {
+            currentInteractionMode = mode;
+            localStorage.setItem('falso_interaction_mode', mode);
+            applyInteractionModeUI();
+            if (saveToBackend) {
+                fetch('/api/v1/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ interaction_mode: mode })
+                }).catch(e => console.warn('[Profile Sync Error]', e));
+            }
         }
 
-        function applyVoiceModeUI() {
+        function applyInteractionModeUI(hasCodeOrArtifact = false) {
             const chatArea = document.getElementById('chat-area');
-            const setSelect = document.getElementById('set-voice-mode');
-            if (setSelect) setSelect.value = currentVoiceMode;
+            const setSelect = document.getElementById('set-interaction-mode');
+            if (setSelect) setSelect.value = currentInteractionMode;
 
             if (!chatArea) return;
-            if (currentVoiceMode === 'voice_only') {
+            if (currentInteractionMode === 'voice_only') {
                 chatArea.style.display = 'none';
-            } else if (currentVoiceMode === 'voice_transcript') {
-                chatArea.style.display = 'flex';
-                chatArea.style.opacity = '0.7';
-            } else { // chat_mode
+            } else if (currentInteractionMode === 'display_mode') {
                 chatArea.style.display = 'flex';
                 chatArea.style.opacity = '1.0';
+            } else if (currentInteractionMode === 'automatic_mode') {
+                if (hasCodeOrArtifact) {
+                    chatArea.style.display = 'flex';
+                    chatArea.style.opacity = '0.95';
+                } else {
+                    chatArea.style.display = 'none';
+                }
             }
         }
 
@@ -1004,7 +1034,7 @@
                 chatArea.style.display = 'flex';
                 chatArea.style.opacity = '0.95';
             } else {
-                if (currentVoiceMode === 'voice_only') {
+                if (currentInteractionMode === 'voice_only') {
                     chatArea.style.display = 'none';
                 }
             }
@@ -1860,6 +1890,17 @@
                 setTimeout(() => toast.remove(), 400);
             }, 5500);
         };
+
+        // Global Keyboard Shortcut: [CMD+D] / [CTRL+D] Interaction Mode Toggle
+        window.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+                e.preventDefault();
+                const modes = ['voice_only', 'display_mode', 'automatic_mode'];
+                const nextIdx = (modes.indexOf(currentInteractionMode) + 1) % modes.length;
+                updateInteractionMode(modes[nextIdx]);
+                console.log('[InteractionMode] Toggled mode via shortcut to:', modes[nextIdx]);
+            }
+        });
 
         // Animation logic
         window.addEventListener('resize', () => {
