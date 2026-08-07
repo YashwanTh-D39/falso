@@ -19,78 +19,127 @@ export class OrbCore {
 
   init() {
     const THREE = this.THREE;
+    console.log('[ORB CREATION DIAGNOSTICS]');
 
-    // Layer 1: Core Energy Sphere - Bright white-cyan energy
-    const coreGeo = new THREE.IcosahedronGeometry(0.85, 4);
-    const coreMat = new THREE.MeshStandardMaterial({
-      color: 0xF0F8FF,
-      emissive: 0x00E5FF,
-      emissiveIntensity: 0.8,
-      roughness: 0.1,
-      metalness: 0.9,
-      wireframe: false
-    });
-    this.innerCore = new THREE.Mesh(coreGeo, coreMat);
-    this.group.add(this.innerCore);
+    // 1. Core Geometry
+    let coreGeo = null;
+    try {
+      coreGeo = new THREE.IcosahedronGeometry(0.85, 4);
+      console.log('Geometry:\n  IcosahedronGeometry:', !!coreGeo);
+    } catch (geoErr) {
+      console.error('Geometry creation FAILED:', geoErr);
+      throw geoErr;
+    }
+
+    // 2. Core Material
+    let coreMat = null;
+    try {
+      coreMat = new THREE.MeshStandardMaterial({
+        color: 0xF0F8FF,
+        emissive: 0x00E5FF,
+        emissiveIntensity: 0.8,
+        roughness: 0.1,
+        metalness: 0.9,
+        wireframe: false
+      });
+      console.log('Material:\n  MeshStandardMaterial:', !!coreMat);
+    } catch (matErr) {
+      console.error('Material creation FAILED:', matErr);
+      throw matErr;
+    }
+
+    // 3. Core Mesh
+    try {
+      this.innerCore = new THREE.Mesh(coreGeo, coreMat);
+      console.log('Mesh:\n  THREE.Mesh:', !!this.innerCore);
+    } catch (meshErr) {
+      console.error('Mesh creation FAILED:', meshErr);
+      throw meshErr;
+    }
+
+    // 4. Attach to Group & Scene
+    try {
+      this.group.add(this.innerCore);
+      console.log('Scene.add(mesh):\n  success: true');
+    } catch (addErr) {
+      console.error('Scene.add(mesh) FAILED:', addErr);
+      throw addErr;
+    }
 
     // Layer 2: Animated Plasma Wireframe Shell
-    const shellGeo = new THREE.IcosahedronGeometry(1.25, 3);
-    const shellMat = new THREE.MeshStandardMaterial({
-      color: 0x00E5FF,
-      emissive: 0x00E5FF,
-      emissiveIntensity: 0.4,
-      roughness: 0.15,
-      metalness: 0.85,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.5
-    });
-    this.outerShell = new THREE.Mesh(shellGeo, shellMat);
-    this.group.add(this.outerShell);
+    try {
+      const shellGeo = new THREE.IcosahedronGeometry(1.25, 3);
+      const shellMat = new THREE.MeshStandardMaterial({
+        color: 0x00E5FF,
+        emissive: 0x00E5FF,
+        emissiveIntensity: 0.4,
+        roughness: 0.15,
+        metalness: 0.85,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.5
+      });
+      this.outerShell = new THREE.Mesh(shellGeo, shellMat);
+      this.group.add(this.outerShell);
+    } catch (e) {
+      console.error('Outer shell creation failed:', e);
+    }
 
     // Layer 3: Plasma Aura Sphere
-    const plasmaGeo = new THREE.IcosahedronGeometry(1.45, 2);
-    const plasmaMat = new THREE.MeshBasicMaterial({
-      color: 0x7DF9FF,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.25
-    });
-    this.plasmaMesh = new THREE.Mesh(plasmaGeo, plasmaMat);
-    this.group.add(this.plasmaMesh);
+    try {
+      const plasmaGeo = new THREE.IcosahedronGeometry(1.45, 2);
+      const plasmaMat = new THREE.MeshBasicMaterial({
+        color: 0x7DF9FF,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.25
+      });
+      this.plasmaMesh = new THREE.Mesh(plasmaGeo, plasmaMat);
+      this.group.add(this.plasmaMesh);
+    } catch (e) {
+      console.error('Plasma mesh creation failed:', e);
+    }
 
     // Layer 4: Outer Glow Sphere
-    const glowGeo = new THREE.SphereGeometry(1.6, 32, 32);
-    this.glowMat = new THREE.MeshBasicMaterial({
-      color: 0x00E5FF,
-      transparent: true,
-      opacity: 0.35,
-      side: THREE.BackSide
-    });
-    const glowMesh = new THREE.Mesh(glowGeo, this.glowMat);
-    this.group.add(glowMesh);
+    try {
+      const glowGeo = new THREE.SphereGeometry(1.6, 32, 32);
+      this.glowMat = new THREE.MeshBasicMaterial({
+        color: 0x00E5FF,
+        transparent: true,
+        opacity: 0.35,
+        side: THREE.BackSide
+      });
+      const glowMesh = new THREE.Mesh(glowGeo, this.glowMat);
+      this.group.add(glowMesh);
+    } catch (e) {
+      console.error('Glow mesh creation failed:', e);
+    }
 
     // Layer 5: Floating Energy Particle Dust
-    const particleCount = 120;
-    const pGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    for (let i = 0; i < particleCount * 3; i += 3) {
-      const r = 1.6 + Math.random() * 0.8;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      positions[i] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i + 1] = r * Math.sin(phi) * Math.sin(theta);
-      positions[i + 2] = r * Math.cos(phi);
+    try {
+      const particleCount = 120;
+      const pGeo = new THREE.BufferGeometry();
+      const positions = new Float32Array(particleCount * 3);
+      for (let i = 0; i < particleCount * 3; i += 3) {
+        const r = 1.6 + Math.random() * 0.8;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        positions[i] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i + 1] = r * Math.sin(phi) * Math.sin(theta);
+        positions[i + 2] = r * Math.cos(phi);
+      }
+      pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const pMat = new THREE.PointsMaterial({
+        color: 0x80D8FF,
+        size: 0.04,
+        transparent: true,
+        opacity: 0.7
+      });
+      this.particles = new THREE.Points(pGeo, pMat);
+      this.group.add(this.particles);
+    } catch (e) {
+      console.error('Particle creation failed:', e);
     }
-    pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const pMat = new THREE.PointsMaterial({
-      color: 0x80D8FF,
-      size: 0.04,
-      transparent: true,
-      opacity: 0.7
-    });
-    this.particles = new THREE.Points(pGeo, pMat);
-    this.group.add(this.particles);
   }
 
   animate(time, orbState, micLevel = 0, bloomPass, caPass) {

@@ -54,6 +54,7 @@ export class OrbManager {
 
     // 1. OrbCore (Energy core & breathing)
     this.orbCore = new OrbCore(THREE);
+    this.innerCore = this.orbCore.innerCore;
     this.orbGroup.add(this.orbCore.group);
 
     // 2. OrbitalRenderer (5 Orbital Rings)
