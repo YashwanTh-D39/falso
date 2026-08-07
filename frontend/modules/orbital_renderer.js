@@ -1,7 +1,7 @@
 /**
- * OrbitalRenderer module for FALSO Living Orb.
- * Recreates thin intersecting orbital rings matching the reference screenshot.
- * Reserves orbital paths for backend system entities (Chrome, VS Code, Explorer, CPU, RAM, etc.).
+ * OrbitalRenderer module for FALSO Living Orb V2.
+ * Renders Layer 3 (Three independent orbital rings with different inclinations/speeds)
+ * and Layer 8 (Reserves 40 orbital slots for backend system entities).
  */
 
 import { MaterialFactory } from './material_factory.js';
@@ -12,16 +12,18 @@ export class OrbitalRenderer {
     this.matFactory = new MaterialFactory(THREE);
     this.group = new THREE.Group();
     this.rings = [];
+    this.slots = [];
     this.init();
   }
 
   init() {
     const THREE = this.THREE;
+
+    // Layer 3: 3 Independent Orbital Rings with different inclinations and speeds
     const ringConfigs = [
-      { radius: 2.2, color: 0x00E5FF, opacity: 0.5, rx: Math.PI / 2.2, ry: 0.1, speed: 0.001 },
-      { radius: 3.8, color: 0xFFB74D, opacity: 0.35, rx: Math.PI / 2.0, ry: -0.2, speed: -0.0008 },
-      { radius: 4.8, color: 0xFF5252, opacity: 0.25, rx: Math.PI / 1.8, ry: 0.3, speed: 0.0006 },
-      { radius: 5.8, color: 0x00E676, opacity: 0.2, rx: Math.PI / 2.1, ry: -0.4, speed: -0.0005 }
+      { radius: 2.8, color: 0x00E5FF, opacity: 0.45, rx: Math.PI / 2.3, ry: 0.25, speed: 0.0012 },
+      { radius: 3.2, color: 0x448AFF, opacity: 0.35, rx: -Math.PI / 2.1, ry: -0.45, speed: -0.0018 },
+      { radius: 3.6, color: 0xBA68C8, opacity: 0.30, rx: Math.PI / 1.9, ry: 0.35, speed: 0.0015 }
     ];
 
     ringConfigs.forEach((cfg, idx) => {
@@ -45,11 +47,25 @@ export class OrbitalRenderer {
         line.rotation.y = cfg.ry;
 
         this.group.add(line);
-        this.rings.push({ line, speed: cfg.speed });
+        this.rings.push({ line, speed: cfg.speed, radius: cfg.radius });
       } catch (e) {
         console.error(`[ORBITAL_RENDERER] Ring ${idx} creation error:`, e);
       }
     });
+
+    // Layer 8: Reserve 40 Orbital Slots across the 3 rings
+    const totalSlots = 40;
+    for (let i = 0; i < totalSlots; i++) {
+      const ringIdx = i % this.rings.length;
+      const angle = (i / totalSlots) * Math.PI * 2;
+      this.slots.push({
+        slotId: i,
+        ringIdx,
+        radius: this.rings[ringIdx].radius,
+        angle,
+        occupied: false
+      });
+    }
   }
 
   animate(time) {
