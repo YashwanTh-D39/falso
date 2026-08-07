@@ -205,7 +205,11 @@ class FilesystemIndexerService:
     def start(self):
         logger.info("Starting Filesystem Indexer Service...")
         # 1. Initial background scan
-        asyncio.create_task(self._initial_indexing())
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._initial_indexing())
+        except RuntimeError:
+            pass
 
         # 2. Watchdog Observer
         for path in self.allowed_paths:

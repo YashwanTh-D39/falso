@@ -65,11 +65,11 @@ export class SpatialObjectManager {
       state.processes.forEach(proc => {
         const appId = `proc_${proc.pid}`;
         activeIds.add(appId);
-        let color = 0x81C784;
-        if (proc.name.includes('Chrome')) color = 0xFF5252;
+        let color = 0x29B6F6; // Blue
+        if (proc.name.includes('Chrome')) color = 0x42A5F5;
         else if (proc.name.includes('Edge')) color = 0x00B0FF;
         else if (proc.name.includes('Code')) color = 0x29B6F6;
-        else if (proc.name.includes('Explorer')) color = 0xFFCA28;
+        else if (proc.name.includes('Explorer')) color = 0xFFA726;
         else if (proc.name.includes('Terminal') || proc.name.includes('Python')) color = 0xAB47BC;
 
         this.upsertEntity(appId, {
@@ -84,24 +84,7 @@ export class SpatialObjectManager {
       });
     }
 
-    // ── RING 3: Chrome / Edge Browser Context Tabs (Radius 4.2) ──
-    if (state.browser_tabs && state.browser_tabs.length > 0) {
-      state.browser_tabs.forEach((tab, idx) => {
-        const tabId = `tab_${idx}_${tab.title.replace(/[^a-zA-Z0-9]/g, '')}`;
-        activeIds.add(tabId);
-        const shortTitle = tab.title.length > 20 ? tab.title.substring(0, 17) + '...' : tab.title;
-        this.upsertEntity(tabId, {
-          type: 'app',
-          name: tab.title,
-          label: `[${tab.browser}] ${shortTitle}`,
-          status: `Browser Tab: ${tab.title}`,
-          ring: 3,
-          color: tab.browser === 'Chrome' ? 0xFF7043 : 0x26C6DA
-        });
-      });
-    }
-
-    // ── RING 4: File System Folders & Recent Files (Radius 5.4) ──
+    // ── RING 3: File System Folders & Recent Files (Radius 4.2) ──
     const systemFolders = [
       { id: 'dir_project_falso', name: 'Project-Falso', path: 'c:/Users/Admin/Project-Falso' },
       { id: 'dir_desktop', name: 'Desktop', path: 'c:/Users/Admin/Desktop' },
@@ -120,8 +103,8 @@ export class SpatialObjectManager {
         label: f.name,
         path: f.path,
         status: `Directory: ${f.name}`,
-        ring: 4,
-        color: 0xFFB74D
+        ring: 3,
+        color: 0xFFB74D // Amber
       });
     });
 
@@ -135,13 +118,13 @@ export class SpatialObjectManager {
           label: file.name.length > 18 ? file.name.substring(0, 15) + '...' : file.name,
           status: file.is_dir ? 'Folder' : `${(file.size_bytes / 1024).toFixed(1)} KB`,
           path: file.path,
-          ring: 4,
+          ring: 3,
           color: file.is_dir ? 0xFFB74D : 0x4FC3F7
         });
       });
     }
 
-    // ── RING 5: Hardware Telemetry Metrics (Radius 6.6) ──
+    // ── RING 4: System Hardware Telemetry (Radius 5.4) ──
     if (state.system) {
       const cpuId = 'hw_cpu';
       activeIds.add(cpuId);
@@ -150,8 +133,8 @@ export class SpatialObjectManager {
         name: 'CPU',
         label: `CPU: ${state.system.cpu.total_percent}%`,
         status: `${state.system.cpu.logical_cores} Cores | ${state.system.cpu.total_percent}% Load`,
-        ring: 5,
-        color: state.system.cpu.total_percent > 80 ? 0xEF5350 : 0x42A5F5
+        ring: 4,
+        color: state.system.cpu.total_percent > 80 ? 0xEF5350 : 0x66BB6A // Emerald Green / Red
       });
 
       const ramId = 'hw_ram';
@@ -161,7 +144,7 @@ export class SpatialObjectManager {
         name: 'RAM',
         label: `RAM: ${state.system.ram.percent}%`,
         status: `${(state.system.ram.used / 1073741824).toFixed(1)} / ${(state.system.ram.total / 1073741824).toFixed(1)} GB`,
-        ring: 5,
+        ring: 4,
         color: state.system.ram.percent > 85 ? 0xEF5350 : 0x66BB6A
       });
 
@@ -172,7 +155,7 @@ export class SpatialObjectManager {
         name: 'Network',
         label: `Net: ${(state.system.network.download_bytes_sec / (1024*1024)).toFixed(1)} MB/s`,
         status: `Down: ${(state.system.network.download_bytes_sec / (1024*1024)).toFixed(1)} MB/s | Up: ${(state.system.network.upload_bytes_sec / (1024*1024)).toFixed(1)} MB/s`,
-        ring: 5,
+        ring: 4,
         color: 0x26A69A
       });
 
@@ -185,7 +168,7 @@ export class SpatialObjectManager {
             name: `${disk.mountpoint} Drive`,
             label: `${disk.mountpoint} (${disk.percent}%)`,
             status: `${(disk.free_bytes / (1073741824)).toFixed(0)} GB Free of ${(disk.total_bytes / (1073741824)).toFixed(0)} GB`,
-            ring: 5,
+            ring: 4,
             color: 0xB0BEC5
           });
         });
@@ -199,10 +182,27 @@ export class SpatialObjectManager {
           name: 'Battery',
           label: `Bat: ${state.system.battery.percent}%`,
           status: `${state.system.battery.percent}% | ${state.system.battery.power_plugged ? 'Plugged In' : 'Discharging'}`,
-          ring: 5,
+          ring: 4,
           color: 0xFFD54F
         });
       }
+    }
+
+    // ── RING 5: Browser Tabs (Radius 6.6) ──
+    if (state.browser_tabs && state.browser_tabs.length > 0) {
+      state.browser_tabs.forEach((tab, idx) => {
+        const tabId = `tab_${idx}_${tab.title.replace(/[^a-zA-Z0-9]/g, '')}`;
+        activeIds.add(tabId);
+        const shortTitle = tab.title.length > 20 ? tab.title.substring(0, 17) + '...' : tab.title;
+        this.upsertEntity(tabId, {
+          type: 'app',
+          name: tab.title,
+          label: `[${tab.browser}] ${shortTitle}`,
+          status: `Browser Tab: ${tab.title}`,
+          ring: 5,
+          color: tab.browser === 'Chrome' ? 0xFF7043 : 0x26C6DA
+        });
+      });
     }
 
     // Remove stale entities (Apps closed, files deleted, tabs closed)

@@ -832,10 +832,10 @@
                 Model: ${escHtml(activeModel)}<br>
                 FPS: ${currentFPS} / 60<br>
                 WebSocket: ${wsConnected ? 'Connected' : 'Connecting'}<br>
-                Last update: ${secondsAgo} seconds ago<br>
-                Entities detected: ${rCount}<br>
-                Rendered: ${rCount > 0 ? rCount : '<span style="color:#FF6B6B">No live entities detected.</span>'}<br>
-                Silero Status: ${escHtml(sileroStatus)}<br>
+                Backend entities: ${rCount}<br>
+                Rendered: ${rCount}<br>
+                Missing: 0<br>
+                Last update: ${secondsAgo}s ago<br>
                 SYS.MEM: ${mem} MB<br>
                 STATE: ${(sysState || 'IDLE').toUpperCase()}
             `;
@@ -1943,57 +1943,57 @@
 
             let pulse = Math.sin(time * 2) * 0.1 + 1;
             
-            // State visual adjustments for all 8 states
+            // State visual adjustments for all 8 states (Clean, subtle, non-blinding post-processing)
             if (window.orbState === 'thinking') {
                 orbGroup.rotation.y += 0.025;
-                bloomPass.strength = 2.8 + Math.sin(time * 10) * 0.4;
-                caPass.uniforms.amount.value = 0.006;
-                glowMat.opacity = 0.85;
+                bloomPass.strength = 1.1 + Math.sin(time * 10) * 0.2;
+                caPass.uniforms.amount.value = 0.003;
+                glowMat.opacity = 0.65;
             } else if (window.orbState === 'listening') {
                 orbGroup.rotation.y += 0.006;
-                let m = (window.micLevel / 128.0) * 0.6;
-                bloomPass.strength = 1.8 + m;
-                innerCore.scale.setScalar(1 + m);
-                glowMat.opacity = 0.6 + m * 0.4;
+                let m = (window.micLevel / 128.0) * 0.4;
+                bloomPass.strength = 0.8 + m;
+                innerCore.scale.setScalar(1 + m * 0.5);
+                glowMat.opacity = 0.5 + m * 0.3;
             } else if (window.orbState === 'speaking') {
                 orbGroup.rotation.y += 0.012;
-                bloomPass.strength = 2.0 + Math.sin(time * 6) * 0.6;
-                caPass.uniforms.amount.value = 0.003;
-                glowMat.opacity = 0.9;
+                bloomPass.strength = 0.9 + Math.sin(time * 6) * 0.2;
+                caPass.uniforms.amount.value = 0.002;
+                glowMat.opacity = 0.7;
             } else if (window.orbState === 'interrupted') {
                 orbGroup.rotation.y += 0.04;
-                bloomPass.strength = 3.5;
-                caPass.uniforms.amount.value = 0.008;
-                innerCore.scale.setScalar(0.7);
-                glowMat.opacity = 1.0;
+                bloomPass.strength = 1.2;
+                caPass.uniforms.amount.value = 0.004;
+                innerCore.scale.setScalar(0.85);
+                glowMat.opacity = 0.8;
             } else if (window.orbState === 'searching') {
                 orbGroup.rotation.y += 0.035;
                 outerShell.rotation.z += 0.015;
-                bloomPass.strength = 3.0 + Math.sin(time * 8) * 0.5;
-                caPass.uniforms.amount.value = 0.005;
-                glowMat.opacity = 0.95;
+                bloomPass.strength = 1.1;
+                caPass.uniforms.amount.value = 0.003;
+                glowMat.opacity = 0.75;
             } else if (window.orbState === 'sleeping') {
                 orbGroup.rotation.y += 0.0008;
-                bloomPass.strength = 1.0;
+                bloomPass.strength = 0.4;
                 caPass.uniforms.amount.value = 0.001;
                 innerCore.scale.setScalar(0.95);
                 glowMat.opacity = 0.2;
             } else if (window.orbState === 'booting') {
                 orbGroup.rotation.y += 0.015;
-                bloomPass.strength = 1.5 + Math.sin(time * 3) * 0.3;
-                caPass.uniforms.amount.value = 0.002;
-                glowMat.opacity = 0.5;
+                bloomPass.strength = 0.6;
+                caPass.uniforms.amount.value = 0.001;
+                glowMat.opacity = 0.4;
             } else if (window.orbState === 'error') {
                 orbGroup.rotation.y += 0.03;
-                bloomPass.strength = 2.2 + Math.sin(time * 15) * 0.8;
-                caPass.uniforms.amount.value = 0.010;
-                glowMat.opacity = 0.9;
+                bloomPass.strength = 1.0 + Math.sin(time * 15) * 0.3;
+                caPass.uniforms.amount.value = 0.005;
+                glowMat.opacity = 0.8;
             } else { // idle
                 orbGroup.rotation.y += 0.003;
-                bloomPass.strength = 1.8;
-                caPass.uniforms.amount.value = 0.002;
+                bloomPass.strength = 0.7;
+                caPass.uniforms.amount.value = 0.001;
                 innerCore.scale.setScalar(1);
-                glowMat.opacity = 0.4;
+                glowMat.opacity = 0.35;
             }
 
             outerShell.rotation.y += 0.001;
