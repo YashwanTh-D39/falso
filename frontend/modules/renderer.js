@@ -88,8 +88,13 @@ export class RendererManager {
     });
   }
 
-  render() {
+  render(time = 0) {
     if (this.controls) this.controls.update();
+
+    if (this.camera) {
+      this.camera.position.x = Math.sin(time * 0.4) * 0.12;
+      this.camera.position.y = Math.cos(time * 0.3) * 0.08;
+    }
 
     try {
       if (this.composer) {
