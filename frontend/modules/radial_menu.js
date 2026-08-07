@@ -3,6 +3,7 @@
  * Appears when holding or selecting a 3D object to provide context actions.
  */
 
+import * as THREE from 'three';
 import { createTextSprite } from './utils.js';
 
 export class RadialMenu {

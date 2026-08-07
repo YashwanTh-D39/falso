@@ -3,8 +3,10 @@
  * Translates MediaPipe landmarks into 3D gestures (Pinch, Grab, Point, ThumbsUp).
  */
 
+import * as THREE from 'three';
+
 export class GestureEngine {
-  constructor(scene, camera, THREE) {
+  constructor(scene, camera) {
     this.scene = scene;
     this.camera = camera;
     this.THREE = THREE;

@@ -2,6 +2,8 @@
  * Shared utility functions for FALSO 3D Spatial OS frontend modules.
  */
 
+import * as THREE from 'three';
+
 export function createTextSprite(text, options = {}) {
   const fontface = options.fontface || 'Arial';
   const fontsize = options.fontsize || 24;

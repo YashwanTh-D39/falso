@@ -3,6 +3,7 @@
  * Transforms live backend OS resources (Apps, Folders, Files, Drives, Hardware) into interactive 3D orbiting entities.
  */
 
+import * as THREE from 'three';
 import { createTextSprite } from './utils.js';
 
 export class SpatialObjectManager {
