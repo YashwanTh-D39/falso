@@ -3,8 +3,6 @@
  * Initializes camera feed and loads MediaPipe tasks-vision HandLandmarker.
  */
 
-import { FilesetResolver, HandLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm/vision_bundle.mjs';
-
 export class HandTracker {
   constructor() {
     this.handLandmarker = null;
@@ -15,6 +13,13 @@ export class HandTracker {
 
   async initialize() {
     try {
+      // Dynamic import to prevent CSP blocking
+      const mediapipe = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm/vision_bundle.mjs').catch(() => null);
+      if (!mediapipe) {
+        console.warn('[HandTracker] MediaPipe CDN unavailable or blocked by CSP -> Hand tracking disabled');
+        return;
+      }
+      const { FilesetResolver, HandLandmarker } = mediapipe;
       // 1. Create hidden video element
       this.video = document.createElement('video');
       this.video.style.display = 'none';
