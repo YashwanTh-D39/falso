@@ -189,7 +189,7 @@ class BootManager {
       const elapsed = clock ? clock.getElapsedTime() : performance.now() / 1000;
 
       // 1. Render Three.js Scene
-      rendererManager.render();
+      rendererManager.render(elapsed);
 
       // 2. Animate Living Orb
       orbManager.animate(window.micLevel || 0);
