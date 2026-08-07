@@ -11,6 +11,36 @@ export class DiagnosticsManager {
     this.renderedEntitiesCount = 0;
     this.activeProvider = "Ollama";
     this.activeModel = "gemma3:4b";
+
+    this.stages = {
+      threeImport: 'PENDING',
+      sceneCreated: 'PENDING',
+      cameraCreated: 'PENDING',
+      rendererCreated: 'PENDING',
+      domAttached: 'PENDING',
+      animLoopStarted: 'PENDING',
+      orbManagerInstantiated: 'PENDING',
+      livingOrbMeshCreated: 'PENDING',
+      lightingCreated: 'PENDING',
+      orbAddedToScene: 'PENDING',
+      renderLoopFrames: 'PENDING',
+      webSocket: 'PENDING',
+      spatialService: 'PENDING',
+      entityBroadcaster: 'PENDING',
+      entityPackets: 'PENDING',
+      nodesCreated: 'PENDING'
+    };
+    this.failedStage = null;
+    this.failureReason = null;
+  }
+
+  setStage(stage, status, reason = null) {
+    this.stages[stage] = status;
+    if (status === 'FAILED') {
+      this.failedStage = stage;
+      this.failureReason = reason;
+      console.error(`[DIAGNOSTICS STAGE FAILURE] ${stage}: ${reason}`);
+    }
   }
 
   tickFPS() {
@@ -20,6 +50,9 @@ export class DiagnosticsManager {
       this.currentFPS = this.frameCount;
       this.frameCount = 0;
       this.lastFpsCalcTime = now;
+      if (this.stages.renderLoopFrames !== 'OK') {
+        this.setStage('renderLoopFrames', 'OK');
+      }
       return true;
     }
     return false;
@@ -34,18 +67,29 @@ export class DiagnosticsManager {
     const frameTimeMs = (1000 / Math.max(this.currentFPS, 1)).toFixed(1);
 
     const esc = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const colorStatus = (st) => {
+      if (st === 'OK') return '<span style="color:#81C784;font-weight:bold;">OK</span>';
+      if (st === 'FAILED') return '<span style="color:#FF5252;font-weight:bold;">FAILED</span>';
+      return '<span style="color:#FFA726;">WAITING</span>';
+    };
+
+    let failureAlert = '';
+    if (this.failedStage) {
+      failureAlert = `<div style="background:rgba(255,82,82,0.2);border:1px solid #FF5252;padding:6px;margin-bottom:8px;color:#FF5252;font-size:11px;">
+        <strong>STAGE FAILURE: ${esc(this.failedStage)}</strong><br>${esc(this.failureReason || 'Unknown error')}
+      </div>`;
+    }
 
     diag.innerHTML = `
-      Provider: ${esc(this.activeProvider)}<br>
-      Model: ${esc(this.activeModel)}<br>
-      FPS: ${this.currentFPS} / 60<br>
-      Frame time: ${frameTimeMs} ms<br>
-      WebSocket: ${wsConnected ? 'Connected' : 'Connecting'}<br>
-      Backend entities: ${rCount}<br>
-      Rendered entities: ${rCount > 0 ? rCount : '<span style="color:#FFA726">Waiting for live system entities...</span>'}<br>
-      TTS state: ${isSpeakingSpeech ? 'SPEAKING' : 'IDLE'}<br>
-      STT state: ${micActive ? 'LISTENING' : 'OFF'}<br>
-      Last update: ${secondsAgo}s ago<br>
+      ${failureAlert}
+      Renderer: ${colorStatus(this.stages.rendererCreated)}<br>
+      Scene: ${colorStatus(this.stages.sceneCreated)}<br>
+      Camera: ${colorStatus(this.stages.cameraCreated)}<br>
+      Orb Mesh: ${colorStatus(this.stages.livingOrbMeshCreated)}<br>
+      WebSocket: ${wsConnected ? colorStatus('OK') : colorStatus(this.stages.webSocket)}<br>
+      Entity Feed: ${rCount > 0 ? colorStatus('OK') : '<span style="color:#FFA726">Waiting for live system entities...</span>'}<br>
+      FPS: ${this.currentFPS} / 60 (${frameTimeMs} ms)<br>
+      Rendered nodes: ${rCount}<br>
       STATE: ${(sysState || 'IDLE').toUpperCase()}
     `;
   }

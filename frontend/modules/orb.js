@@ -3,18 +3,23 @@ import { rendererManager } from './renderer.js';
 export class OrbManager {
   constructor(rendererManager) {
     this.rm = rendererManager;
-    this.THREE = rendererManager.THREE;
+    this.THREE = null;
     this.orbGroup = null;
     this.innerCore = null;
     this.outerShell = null;
     this.glowMat = null;
-    this.clock = new this.THREE.Clock();
+    this.clock = null;
     this.orbState = 'idle';
   }
 
   init() {
+    this.THREE = this.rm.THREE;
     const THREE = this.THREE;
+    if (!THREE) throw new Error('Three.js instance is missing in OrbManager');
+
+    this.clock = new THREE.Clock();
     const scene = this.rm.scene;
+    if (!scene) throw new Error('Scene is missing in OrbManager.init()');
 
     // Ambient & Directional Lighting
     const ambientLight = new THREE.AmbientLight(0x00E5FF, 0.6);

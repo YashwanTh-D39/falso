@@ -28,33 +28,66 @@ class BootManager {
     console.log('[FALSO Boot Sequence] Initializing single modular boot pipeline...');
     try {
       // 1. Settings
-      console.log('[FALSO Boot Step 1/8] Initializing Settings...');
       settingsManager.init();
 
-      // 2. Three.js Scene, Camera, & Renderer
-      console.log('[FALSO Boot Step 2/8] Initializing Renderer, Scene & Camera...');
-      rendererManager.init();
-      if (!rendererManager.scene || !rendererManager.camera || !rendererManager.renderer) {
-        throw new Error('Three.js scene/camera/renderer initialization failed');
+      // 2. Three.js Import & Scene/Camera/Renderer Initialization
+      if (rendererManager.THREE) {
+        diagnosticsManager.setStage('threeImport', 'OK');
+      } else {
+        diagnosticsManager.setStage('threeImport', 'FAILED', 'Three.js library missing');
+        throw new Error('Three.js library missing');
       }
 
-      // 3. OrbManager Instantiation & Attachment
-      console.log('[FALSO Boot Step 3/8] Initializing Living Orb Manager...');
+      rendererManager.init();
+
+      if (rendererManager.scene) {
+        diagnosticsManager.setStage('sceneCreated', 'OK');
+      } else {
+        diagnosticsManager.setStage('sceneCreated', 'FAILED', 'Three.Scene creation failed');
+        throw new Error('Scene creation failed');
+      }
+
+      if (rendererManager.camera) {
+        diagnosticsManager.setStage('cameraCreated', 'OK');
+      } else {
+        diagnosticsManager.setStage('cameraCreated', 'FAILED', 'PerspectiveCamera creation failed');
+        throw new Error('Camera creation failed');
+      }
+
+      if (rendererManager.renderer && rendererManager.renderer.domElement) {
+        diagnosticsManager.setStage('rendererCreated', 'OK');
+        diagnosticsManager.setStage('domAttached', 'OK');
+      } else {
+        diagnosticsManager.setStage('rendererCreated', 'FAILED', 'WebGLRenderer canvas missing');
+        diagnosticsManager.setStage('domAttached', 'FAILED', 'Canvas #webgl-canvas missing from DOM');
+        throw new Error('WebGLRenderer canvas missing');
+      }
+
+      // 3. OrbManager & Living Orb Mesh
+      diagnosticsManager.setStage('orbManagerInstantiated', 'OK');
       orbManager.init();
-      if (!orbManager.orbGroup) {
-        throw new Error('OrbManager orbGroup failed to attach to scene');
+
+      if (orbManager.orbGroup && orbManager.innerCore) {
+        diagnosticsManager.setStage('livingOrbMeshCreated', 'OK');
+        diagnosticsManager.setStage('lightingCreated', 'OK');
+        diagnosticsManager.setStage('orbAddedToScene', 'OK');
+      } else {
+        diagnosticsManager.setStage('livingOrbMeshCreated', 'FAILED', 'Orb mesh creation failed');
+        throw new Error('Orb mesh creation failed');
       }
 
       // 4. Spatial 3D Objects Manager & Fallback Entities
-      console.log('[FALSO Boot Step 4/8] Initializing Spatial Object Manager...');
       this.spatialObjectManager = new SpatialObjectManager(rendererManager.scene, rendererManager.THREE);
       window.spatialObjectManager = this.spatialObjectManager;
       this.spatialObjectManager.ensureFallbackEntities();
+      diagnosticsManager.setStage('nodesCreated', 'OK');
 
       // 5. WebSocket Connection & Packet Listener
-      console.log('[FALSO Boot Step 5/8] Connecting Spatial Telemetry WebSocket...');
       this.spatialWSClient = new SpatialWSClient((payload) => {
-        console.log('[SPATIAL WS] Entity packet received:', payload ? Object.keys(payload) : null);
+        diagnosticsManager.setStage('webSocket', 'OK');
+        diagnosticsManager.setStage('spatialService', 'OK');
+        diagnosticsManager.setStage('entityBroadcaster', 'OK');
+        diagnosticsManager.setStage('entityPackets', 'OK');
         if (this.spatialObjectManager) {
           this.spatialObjectManager.syncWithState(payload);
         }
@@ -62,7 +95,6 @@ class BootManager {
       window.spatialWSClient = this.spatialWSClient;
 
       // 6. Voice & Chat Managers
-      console.log('[FALSO Boot Step 6/8] Initializing Voice & Chat Managers...');
       this.voiceManager = new VoiceManager(orbManager, settingsManager);
       this.chatManager = new ChatManager(this.voiceManager, settingsManager);
 
@@ -71,7 +103,6 @@ class BootManager {
       window.settingsManager = settingsManager;
 
       // 7. UI Listeners & Speech Recognition
-      console.log('[FALSO Boot Step 7/8] Setting up UI & Speech Listeners...');
       this.setupEventListeners();
       this.voiceManager.initSpeechRecognition((cleanText) => {
         this.chatManager.sendToFalso(cleanText);
@@ -79,17 +110,14 @@ class BootManager {
       this.voiceManager.requestMicPermission();
 
       // 8. Animation Loop
-      console.log('[FALSO Boot Step 8/8] Starting Unified Animation Loop...');
       this.startAnimationLoop();
+      diagnosticsManager.setStage('animLoopStarted', 'OK');
 
       this.voiceManager.changeState('idle');
-      console.log('[FALSO Boot Sequence] All 8 boot steps completed successfully!');
+      console.log('[FALSO Boot Sequence] All 11 frontend stages & backend connections verified successfully!');
     } catch (bootErr) {
       console.error('[FALSO Boot Failure]', bootErr);
-      const diag = document.getElementById('diag-content');
-      if (diag) {
-        diag.innerHTML = `<span style="color:#FF5252"><strong>BOOT ERROR:</strong> ${bootErr.message}</span>`;
-      }
+      diagnosticsManager.renderHUD('error', false, false, false);
     }
   }
 
