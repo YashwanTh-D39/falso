@@ -16,15 +16,16 @@ brain_service = BrainService()
 @router.post("/chat/stream")
 async def chat(request: ChatRequest):
     try:
-        brain_service.validate_prompt(request.prompt)
-    except BrainServiceError as e:
+        prompt_str = request.get_prompt()
+        brain_service.validate_prompt(prompt_str)
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
 
     return StreamingResponse(
-        brain_service.chat(request.prompt, history=request.history),
+        brain_service.chat(prompt_str, history=request.history),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

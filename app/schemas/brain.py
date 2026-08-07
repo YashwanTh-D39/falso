@@ -9,7 +9,16 @@ class ChatMessage(BaseModel):
     content: str
 
 
+from typing import Optional
+
 class ChatRequest(BaseModel):
-    prompt: str = Field(min_length=1, max_length=50_000)
+    prompt: Optional[str] = Field(default=None)
+    message: Optional[str] = Field(default=None)
     history: list[ChatMessage] = Field(default_factory=list)
+
+    def get_prompt(self) -> str:
+        p = self.prompt or self.message or ""
+        if not p.strip():
+            raise ValueError("Prompt or message cannot be empty")
+        return p
 

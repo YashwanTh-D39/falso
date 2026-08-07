@@ -60,7 +60,7 @@ export class ChatManager {
       const res = await fetch(API_BASE + '/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({ prompt: text, message: text })
       });
 
       if (!res.ok) {
