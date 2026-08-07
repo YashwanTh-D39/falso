@@ -85,11 +85,30 @@ export class ChatManager {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        fullResponse += chunk;
-        msgDiv.innerHTML = fullResponse.replace(/\n/g, '<br>') + `<span class="meta">FALSO · Streaming...</span>`;
-        if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-        this.voiceManager.processIncomingTokenStream(chunk);
+        const rawChunk = decoder.decode(value, { stream: true });
+        
+        // Parse NDJSON lines or SSE data lines
+        const lines = rawChunk.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          
+          let textSnippet = "";
+          try {
+            const jsonStr = trimmed.startsWith("data: ") ? trimmed.slice(6) : trimmed;
+            const parsed = JSON.parse(jsonStr);
+            textSnippet = parsed.response || parsed.chunk || parsed.text || "";
+          } catch(e) {
+            textSnippet = trimmed;
+          }
+
+          if (textSnippet) {
+            fullResponse += textSnippet;
+            msgDiv.innerHTML = fullResponse.replace(/\n/g, '<br>') + `<span class="meta">FALSO · Streaming...</span>`;
+            if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+            this.voiceManager.processIncomingTokenStream(textSnippet);
+          }
+        }
       }
 
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
