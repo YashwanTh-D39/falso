@@ -1,212 +1,102 @@
 /**
  * OrbCore module for FALSO Living Orb.
- * Jarvis / DeepMind inspired holographic energy core.
- * Features central glowing energy core, animated plasma shell, dynamic bloom,
- * pulsating energy, breathing animation, and energy particles.
+ * Recreates the exact nested wireframe globes and crystal core from the reference screenshot.
  */
+
+import { MaterialFactory } from './material_factory.js';
 
 export class OrbCore {
   constructor(THREE) {
     this.THREE = THREE;
+    this.matFactory = new MaterialFactory(THREE);
     this.group = new THREE.Group();
-    this.innerCore = null;
-    this.outerShell = null;
-    this.plasmaMesh = null;
-    this.particles = null;
-    this.glowMat = null;
+
+    this.outerGlobe = null;
+    this.middleGlobe = null;
+    this.innerCrystal = null;
+    this.innerCoreSolid = null;
+
     this.init();
   }
 
   init() {
     const THREE = this.THREE;
-    console.log('[ORB CREATION DIAGNOSTICS]');
 
-    // 1. Core Geometry
-    let coreGeo = null;
+    // Layer 1: Outer Large Dark Blue Wireframe Containment Globe (Radius ~3.5)
     try {
-      coreGeo = new THREE.IcosahedronGeometry(0.85, 4);
-      console.log('Geometry:\n  IcosahedronGeometry:', !!coreGeo);
-    } catch (geoErr) {
-      console.error('Geometry creation FAILED:', geoErr);
-      throw geoErr;
-    }
-
-    // 2. Core Material
-    let coreMat = null;
-    try {
-      coreMat = new THREE.MeshStandardMaterial({
-        color: 0xF0F8FF,
-        emissive: 0x00E5FF,
-        emissiveIntensity: 0.8,
-        roughness: 0.1,
-        metalness: 0.9,
-        wireframe: false
-      });
-      console.log('Material:\n  MeshStandardMaterial:', !!coreMat);
-    } catch (matErr) {
-      console.error('Material creation FAILED:', matErr);
-      throw matErr;
-    }
-
-    // 3. Core Mesh
-    try {
-      this.innerCore = new THREE.Mesh(coreGeo, coreMat);
-      console.log('Mesh:\n  THREE.Mesh:', !!this.innerCore);
-    } catch (meshErr) {
-      console.error('Mesh creation FAILED:', meshErr);
-      throw meshErr;
-    }
-
-    // 4. Attach to Group & Scene
-    try {
-      this.group.add(this.innerCore);
-      console.log('Scene.add(mesh):\n  success: true');
-    } catch (addErr) {
-      console.error('Scene.add(mesh) FAILED:', addErr);
-      throw addErr;
-    }
-
-    // Layer 2: Animated Plasma Wireframe Shell
-    try {
-      const shellGeo = new THREE.IcosahedronGeometry(1.25, 3);
-      const shellMat = new THREE.MeshStandardMaterial({
-        color: 0x00E5FF,
-        emissive: 0x00E5FF,
-        emissiveIntensity: 0.4,
-        roughness: 0.15,
-        metalness: 0.85,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.5
-      });
-      this.outerShell = new THREE.Mesh(shellGeo, shellMat);
-      this.group.add(this.outerShell);
+      const outerGeo = new THREE.SphereGeometry(3.5, 32, 24);
+      const outerMat = this.matFactory.getOuterWireframeMaterial();
+      this.outerGlobe = new THREE.Mesh(outerGeo, outerMat);
+      this.group.add(this.outerGlobe);
     } catch (e) {
-      console.error('Outer shell creation failed:', e);
+      console.error('[ORB_CORE] Outer globe creation error:', e);
     }
 
-    // Layer 3: Plasma Aura Sphere
+    // Layer 2: Middle Electric Cyan Wireframe Globe (Radius ~1.25)
     try {
-      const plasmaGeo = new THREE.IcosahedronGeometry(1.45, 2);
-      const plasmaMat = new THREE.MeshBasicMaterial({
-        color: 0x7DF9FF,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.25
-      });
-      this.plasmaMesh = new THREE.Mesh(plasmaGeo, plasmaMat);
-      this.group.add(this.plasmaMesh);
+      const middleGeo = new THREE.SphereGeometry(1.25, 24, 18);
+      const middleMat = this.matFactory.getMiddleWireframeMaterial();
+      this.middleGlobe = new THREE.Mesh(middleGeo, middleMat);
+      this.group.add(this.middleGlobe);
     } catch (e) {
-      console.error('Plasma mesh creation failed:', e);
+      console.error('[ORB_CORE] Middle globe creation error:', e);
     }
 
-    // Layer 4: Outer Glow Sphere
+    // Layer 3: Innermost Polyhedron Crystal Core (Radius ~0.35)
     try {
-      const glowGeo = new THREE.SphereGeometry(1.6, 32, 32);
-      this.glowMat = new THREE.MeshBasicMaterial({
-        color: 0x00E5FF,
-        transparent: true,
-        opacity: 0.35,
-        side: THREE.BackSide
-      });
-      const glowMesh = new THREE.Mesh(glowGeo, this.glowMat);
-      this.group.add(glowMesh);
-    } catch (e) {
-      console.error('Glow mesh creation failed:', e);
-    }
+      const crystalGeo = new THREE.IcosahedronGeometry(0.35, 0);
+      const crystalMat = this.matFactory.getCoreCrystalMaterial();
+      this.innerCrystal = new THREE.Mesh(crystalGeo, crystalMat);
+      this.group.add(this.innerCrystal);
 
-    // Layer 5: Floating Energy Particle Dust
-    try {
-      const particleCount = 120;
-      const pGeo = new THREE.BufferGeometry();
-      const positions = new Float32Array(particleCount * 3);
-      for (let i = 0; i < particleCount * 3; i += 3) {
-        const r = 1.6 + Math.random() * 0.8;
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-        positions[i] = r * Math.sin(phi) * Math.cos(theta);
-        positions[i + 1] = r * Math.sin(phi) * Math.sin(theta);
-        positions[i + 2] = r * Math.cos(phi);
-      }
-      pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      const pMat = new THREE.PointsMaterial({
-        color: 0x80D8FF,
-        size: 0.04,
-        transparent: true,
-        opacity: 0.7
-      });
-      this.particles = new THREE.Points(pGeo, pMat);
-      this.group.add(this.particles);
+      // Solid glowing inner center
+      const solidGeo = new THREE.IcosahedronGeometry(0.18, 1);
+      const solidMat = this.matFactory.getCoreSolidMaterial();
+      this.innerCoreSolid = new THREE.Mesh(solidGeo, solidMat);
+      this.group.add(this.innerCoreSolid);
     } catch (e) {
-      console.error('Particle creation failed:', e);
+      console.error('[ORB_CORE] Crystal core creation error:', e);
     }
   }
 
-  animate(time, orbState, micLevel = 0, bloomPass, caPass) {
-    if (!this.group || !this.innerCore) return;
+  animate(time, orbState, micLevel = 0) {
+    if (!this.group) return;
 
-    // Continuous smooth rotations
-    this.outerShell.rotation.y += 0.002;
-    this.outerShell.rotation.x += 0.001;
-    this.plasmaMesh.rotation.y -= 0.003;
-    this.particles.rotation.y += 0.0015;
+    // Smooth counter-rotations matching reference
+    if (this.outerGlobe) {
+      this.outerGlobe.rotation.y += 0.0008;
+      this.outerGlobe.rotation.x += 0.0003;
+    }
 
-    // Pulsating energy & smooth breathing animation
-    const breath = Math.sin(time * 2.2) * 0.04;
-    this.innerCore.scale.setScalar(1.0 + breath);
-    this.plasmaMesh.scale.setScalar(1.0 - breath * 0.5);
+    if (this.middleGlobe) {
+      this.middleGlobe.rotation.y -= 0.003;
+      this.middleGlobe.rotation.z += 0.001;
+    }
 
-    // State-driven visuals (60% bloom cap)
+    if (this.innerCrystal) {
+      this.innerCrystal.rotation.x += 0.008;
+      this.innerCrystal.rotation.y += 0.012;
+    }
+
+    if (this.innerCoreSolid) {
+      this.innerCoreSolid.rotation.y -= 0.015;
+    }
+
+    // Animated breathing glow
+    const breath = Math.sin(time * 2.0) * 0.04;
+    if (this.innerCrystal) this.innerCrystal.scale.setScalar(1.0 + breath);
+    if (this.middleGlobe) this.middleGlobe.scale.setScalar(1.0 - breath * 0.2);
+
+    // State adjustments
     if (orbState === 'thinking') {
-      this.group.rotation.y += 0.025;
-      if (bloomPass) bloomPass.strength = 1.1 + Math.sin(time * 10) * 0.2;
-      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.003;
-      this.glowMat.opacity = 0.65;
+      if (this.middleGlobe) this.middleGlobe.rotation.y -= 0.015;
+      if (this.innerCrystal) this.innerCrystal.rotation.y += 0.03;
     } else if (orbState === 'listening') {
-      this.group.rotation.y += 0.006;
-      let m = (micLevel / 128.0) * 0.4;
-      if (bloomPass) bloomPass.strength = 0.8 + m;
-      this.innerCore.scale.setScalar(1 + m * 0.5);
-      this.glowMat.opacity = 0.5 + m * 0.3;
+      let m = (micLevel / 128.0) * 0.3;
+      if (this.middleGlobe) this.middleGlobe.scale.setScalar(1.0 + m);
+      if (this.innerCoreSolid) this.innerCoreSolid.scale.setScalar(1.0 + m * 0.8);
     } else if (orbState === 'speaking') {
-      this.group.rotation.y += 0.012;
-      if (bloomPass) bloomPass.strength = 0.9 + Math.sin(time * 6) * 0.2;
-      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.002;
-      this.glowMat.opacity = 0.7;
-    } else if (orbState === 'interrupted') {
-      this.group.rotation.y += 0.04;
-      if (bloomPass) bloomPass.strength = 1.2;
-      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.004;
-      this.innerCore.scale.setScalar(0.85);
-      this.glowMat.opacity = 0.8;
-    } else if (orbState === 'searching') {
-      this.group.rotation.y += 0.035;
-      this.outerShell.rotation.z += 0.015;
-      if (bloomPass) bloomPass.strength = 1.1;
-      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.003;
-      this.glowMat.opacity = 0.75;
-    } else if (orbState === 'sleeping') {
-      this.group.rotation.y += 0.0008;
-      if (bloomPass) bloomPass.strength = 0.4;
-      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.001;
-      this.innerCore.scale.setScalar(0.95);
-      this.glowMat.opacity = 0.2;
-    } else if (orbState === 'booting') {
-      this.group.rotation.y += 0.015;
-      if (bloomPass) bloomPass.strength = 0.6;
-      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.001;
-      this.glowMat.opacity = 0.4;
-    } else if (orbState === 'error') {
-      this.group.rotation.y += 0.03;
-      if (bloomPass) bloomPass.strength = 1.0 + Math.sin(time * 15) * 0.3;
-      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.005;
-      this.glowMat.opacity = 0.8;
-    } else { // idle
-      this.group.rotation.y += 0.003;
-      if (bloomPass) bloomPass.strength = 0.7;
-      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.001;
-      this.innerCore.scale.setScalar(1);
-      this.glowMat.opacity = 0.35;
+      if (this.middleGlobe) this.middleGlobe.rotation.y -= 0.008;
     }
   }
 }
