@@ -1,29 +1,14 @@
-/**
- * OrbManager module for FALSO 3D Spatial OS.
- * Orchestrates OrbCore, OrbitalRenderer, EntityRenderer, AnimationController,
- * MaterialFactory, SpatialRenderer, and DebugRenderer.
- */
-
 import { rendererManager } from './renderer.js';
-import { OrbCore } from './orb_core.js';
-import { OrbitalRenderer } from './orbital_renderer.js';
-import { EntityRenderer } from './entity_renderer.js';
-import { AnimationController } from './animation_controller.js';
-import { DebugRenderer } from './debug_renderer.js';
-import { SpatialRenderer } from './spatial_renderer.js';
 
 export class OrbManager {
   constructor(rendererManager) {
     this.rm = rendererManager;
     this.THREE = null;
     this.orbGroup = null;
-    this.orbCore = null;
-    this.orbitalRenderer = null;
-    this.entityRenderer = null;
-    this.debugRenderer = null;
-    this.spatialRenderer = null;
-    this.animController = null;
     this.innerCore = null;
+    this.outerShell = null;
+    this.glowMat = null;
+    this.clock = null;
     this.orbState = 'idle';
   }
 
@@ -38,47 +23,63 @@ export class OrbManager {
     const THREE = this.THREE;
     if (!THREE) throw new Error('Three.js instance is missing in OrbManager');
 
+    this.clock = new THREE.Clock();
     const scene = this.rm.scene;
     if (!scene) throw new Error('Scene is missing in OrbManager.init()');
 
-    this.animController = new AnimationController(THREE);
-    this.clock = this.animController.clock;
-
     // Ambient & Directional Lighting
-    const ambientLight = new THREE.AmbientLight(0x00E5FF, 0.5);
+    const ambientLight = new THREE.AmbientLight(0x00E5FF, 0.6);
     scene.add(ambientLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0x7DF9FF, 1.0);
+    const dirLight1 = new THREE.DirectionalLight(0x7DF9FF, 1.2);
     dirLight1.position.set(5, 10, 7);
     scene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0xFFB74D, 0.4);
+    dirLight2.position.set(-5, -5, -5);
+    scene.add(dirLight2);
 
     this.orbGroup = new THREE.Group();
     scene.add(this.orbGroup);
 
-    // 1. OrbCore (Outer dark blue globe, middle cyan globe, inner crystal core)
-    this.orbCore = new OrbCore(THREE);
-    this.innerCore = this.orbCore.innerCrystal;
-    this.orbGroup.add(this.orbCore.group);
+    // Layer 1: Core - Bright white-blue energy
+    const coreGeo = new THREE.IcosahedronGeometry(0.85, 4);
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0xF0F8FF,
+      emissive: 0x80D8FF,
+      emissiveIntensity: 0.6,
+      roughness: 0.1,
+      metalness: 0.9,
+      wireframe: false
+    });
+    this.innerCore = new THREE.Mesh(coreGeo, coreMat);
+    this.orbGroup.add(this.innerCore);
 
-    // 2. OrbitalRenderer (Thin intersecting orbital rings)
-    this.orbitalRenderer = new OrbitalRenderer(THREE);
-    this.orbGroup.add(this.orbitalRenderer.group);
+    // Layer 2: Inner shell - Electric cyan
+    const shellGeo = new THREE.IcosahedronGeometry(1.2, 3);
+    const shellMat = new THREE.MeshStandardMaterial({
+      color: 0x00E5FF,
+      emissive: 0x00E5FF,
+      emissiveIntensity: 0.3,
+      roughness: 0.15,
+      metalness: 0.85,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.45
+    });
+    this.outerShell = new THREE.Mesh(shellGeo, shellMat);
+    this.orbGroup.add(this.outerShell);
 
-    // 3. EntityRenderer (Real 3D process/app orbital nodes)
-    this.entityRenderer = new EntityRenderer(THREE, scene);
-
-    // 4. SpatialRenderer (3D node layout & raycasting)
-    this.spatialRenderer = new SpatialRenderer(THREE, this.rm.camera, scene);
-
-    // 5. DebugRenderer (Strictly gated behind window.DEBUG_MODE = true)
-    this.debugRenderer = new DebugRenderer(THREE, scene);
-
-    console.log('[LIVING ORB ACCURATELY RECREATED MATCHING REFERENCE SCREENSHOT]');
-    console.log('  OrbCore:', !!this.orbCore);
-    console.log('  OrbitalRenderer:', !!this.orbitalRenderer);
-    console.log('  EntityRenderer:', !!this.entityRenderer);
-    console.log('  SpatialRenderer:', !!this.spatialRenderer);
-    console.log('  DebugRenderer (DEBUG_MODE):', window.DEBUG_MODE === true);
+    // Layer 3: Outer Shell Glow
+    const glowGeo = new THREE.SphereGeometry(1.4, 32, 32);
+    this.glowMat = new THREE.MeshBasicMaterial({
+      color: 0x00E5FF,
+      transparent: true,
+      opacity: 0.35,
+      side: THREE.BackSide
+    });
+    const glowMesh = new THREE.Mesh(glowGeo, this.glowMat);
+    this.orbGroup.add(glowMesh);
   }
 
   updateState(newState) {
@@ -87,18 +88,70 @@ export class OrbManager {
   }
 
   animate(micLevel = 0) {
-    if (!this.animController) return;
-    if (!this.rm || !this.rm.scene) return;
-    if (!this.rm || !this.rm.camera) return;
-    if (!this.rm || !this.rm.renderer) return;
+    if (!this.clock) return;
+    if (!this.orbGroup) return;
 
-    const { dt, time } = this.animController.tick();
+    const dt = this.clock.getDelta();
+    const time = this.clock.getElapsedTime();
 
-    // Render layers cleanly
-    if (this.orbCore) this.orbCore.animate(time, this.orbState, micLevel);
-    if (this.orbitalRenderer) this.orbitalRenderer.animate(time);
-    if (this.entityRenderer) this.entityRenderer.animate(time);
-    if (this.debugRenderer) this.debugRenderer.animate();
+    this.outerShell.rotation.y += 0.001;
+    this.outerShell.rotation.x += 0.0005;
+
+    const bloomPass = this.rm.bloomPass;
+    const caPass = this.rm.caPass;
+
+    // 60% bloom reduction state visual adjustments
+    if (this.orbState === 'thinking') {
+      this.orbGroup.rotation.y += 0.025;
+      if (bloomPass) bloomPass.strength = 1.1 + Math.sin(time * 10) * 0.2;
+      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.003;
+      this.glowMat.opacity = 0.65;
+    } else if (this.orbState === 'listening') {
+      this.orbGroup.rotation.y += 0.006;
+      let m = (micLevel / 128.0) * 0.4;
+      if (bloomPass) bloomPass.strength = 0.8 + m;
+      this.innerCore.scale.setScalar(1 + m * 0.5);
+      this.glowMat.opacity = 0.5 + m * 0.3;
+    } else if (this.orbState === 'speaking') {
+      this.orbGroup.rotation.y += 0.012;
+      if (bloomPass) bloomPass.strength = 0.9 + Math.sin(time * 6) * 0.2;
+      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.002;
+      this.glowMat.opacity = 0.7;
+    } else if (this.orbState === 'interrupted') {
+      this.orbGroup.rotation.y += 0.04;
+      if (bloomPass) bloomPass.strength = 1.2;
+      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.004;
+      this.innerCore.scale.setScalar(0.85);
+      this.glowMat.opacity = 0.8;
+    } else if (this.orbState === 'searching') {
+      this.orbGroup.rotation.y += 0.035;
+      this.outerShell.rotation.z += 0.015;
+      if (bloomPass) bloomPass.strength = 1.1;
+      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.003;
+      this.glowMat.opacity = 0.75;
+    } else if (this.orbState === 'sleeping') {
+      this.orbGroup.rotation.y += 0.0008;
+      if (bloomPass) bloomPass.strength = 0.4;
+      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.001;
+      this.innerCore.scale.setScalar(0.95);
+      this.glowMat.opacity = 0.2;
+    } else if (this.orbState === 'booting') {
+      this.orbGroup.rotation.y += 0.015;
+      if (bloomPass) bloomPass.strength = 0.6;
+      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.001;
+      this.glowMat.opacity = 0.4;
+    } else if (this.orbState === 'error') {
+      this.orbGroup.rotation.y += 0.03;
+      if (bloomPass) bloomPass.strength = 1.0 + Math.sin(time * 15) * 0.3;
+      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.005;
+      this.glowMat.opacity = 0.8;
+    } else { // idle
+      this.orbGroup.rotation.y += 0.003;
+      if (bloomPass) bloomPass.strength = 0.7;
+      if (caPass && caPass.uniforms) caPass.uniforms.amount.value = 0.001;
+      this.innerCore.scale.setScalar(1);
+      this.glowMat.opacity = 0.35;
+    }
   }
 }
 
