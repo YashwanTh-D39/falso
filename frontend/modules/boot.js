@@ -72,9 +72,11 @@ class BootManager {
 
       // 4. OrbManager & Living Orb Mesh
       diagnosticsManager.setStage('orbManagerInstantiated', 'OK');
-      console.log('[BOOT] ✓ OrbManager created');
+      console.log('[TRACE] 4. OrbManager instantiated');
 
       orbManager.init();
+      orbManager.addOrb();
+      console.log('[TRACE] 8. OrbManager.addOrb() executed');
 
       if (!orbManager.orbGroup || !orbManager.innerCore) {
         diagnosticsManager.setStage('livingOrbMeshCreated', 'FAILED', 'Orb mesh creation failed');

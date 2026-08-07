@@ -80,17 +80,38 @@ export class RendererManager {
     this.composer.addPass(this.bloomPass);
     this.composer.addPass(this.caPass);
 
+    // Bright Red Test Sphere at (0,0,0) for camera/renderer verification
+    const testGeo = new THREE.SphereGeometry(0.35, 16, 16);
+    const testMat = new THREE.MeshBasicMaterial({ color: 0xFF0000, wireframe: true });
+    this.testSphere = new THREE.Mesh(testGeo, testMat);
+    this.testSphere.position.set(0, 0, 0);
+    this.scene.add(this.testSphere);
+    console.log('[TRACE] Bright red test sphere added at (0,0,0) -> Camera position:', this.camera.position);
+
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
-      this.composer.setSize(window.innerWidth, window.innerHeight);
+      if (this.composer) this.composer.setSize(window.innerWidth, window.innerHeight);
     });
   }
 
   render() {
     if (this.controls) this.controls.update();
-    if (this.composer) this.composer.render();
+    if (this.testSphere) this.testSphere.rotation.y += 0.01;
+
+    try {
+      if (this.composer) {
+        this.composer.render();
+      } else if (this.renderer && this.scene && this.camera) {
+        this.renderer.render(this.scene, this.camera);
+      }
+    } catch (e) {
+      console.warn('[RENDERER COMPOSER WARN] Falling back to direct WebGL render:', e);
+      if (this.renderer && this.scene && this.camera) {
+        this.renderer.render(this.scene, this.camera);
+      }
+    }
   }
 }
 

@@ -12,6 +12,13 @@ export class OrbManager {
     this.orbState = 'idle';
   }
 
+  addOrb() {
+    if (!this.orbGroup) {
+      this.init();
+    }
+    console.log('[TRACE] 8. OrbManager.addOrb() executed -> orbGroup attached at position:', this.orbGroup ? this.orbGroup.position : null);
+  }
+
   init() {
     this.THREE = this.rm.THREE;
     const THREE = this.THREE;
