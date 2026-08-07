@@ -1,5 +1,5 @@
 /**
- * Chat Stream & UI Message Manager for FALSO.
+ * Chat Stream & UI Message Manager for FALSO Premium UI.
  */
 
 const API_BASE = window.location.origin + '/api/v1';
@@ -8,16 +8,26 @@ export class ChatManager {
   constructor(voiceManager, settingsManager) {
     this.voiceManager = voiceManager;
     this.settingsManager = settingsManager;
+    this.msgCount = 1;
   }
 
   appendMessage(role, text) {
-    const chatArea = document.getElementById('chat-area');
-    if (!chatArea) return;
+    const chatContainer = document.getElementById('chatlog') || document.getElementById('chat-area');
+    if (!chatContainer) return;
+
     const msgDiv = document.createElement('div');
-    msgDiv.className = `message ${role}`;
-    msgDiv.innerHTML = text.replace(/\n/g, '<br>');
-    chatArea.appendChild(msgDiv);
-    chatArea.scrollTop = chatArea.scrollHeight;
+    const roleClass = role === 'assistant' ? 'ai' : (role === 'system' ? 'sys' : role);
+    msgDiv.className = `msg ${roleClass}`;
+    
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    msgDiv.innerHTML = text.replace(/\n/g, '<br>') + `<span class="meta">FALSO · ${timeStr}</span>`;
+
+    chatContainer.appendChild(msgDiv);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    this.msgCount++;
+    const msgCountEl = document.getElementById('msgCount');
+    if (msgCountEl) msgCountEl.textContent = `${this.msgCount} MSGS`;
   }
 
   async sendToFalso(text) {
@@ -48,11 +58,11 @@ export class ChatManager {
     this.voiceManager.clearAudioStreamingQueue();
     this.voiceManager.stopActiveAudioPlayback();
 
-    const chatArea = document.getElementById('chat-area');
+    const chatContainer = document.getElementById('chatlog') || document.getElementById('chat-area');
     const msgDiv = document.createElement('div');
-    msgDiv.className = 'message system';
-    if (chatArea) {
-      chatArea.appendChild(msgDiv);
+    msgDiv.className = 'msg ai';
+    if (chatContainer) {
+      chatContainer.appendChild(msgDiv);
     }
 
     let fullResponse = "";
@@ -77,11 +87,13 @@ export class ChatManager {
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         fullResponse += chunk;
-        msgDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
-        if (chatArea) chatArea.scrollTop = chatArea.scrollHeight;
+        msgDiv.innerHTML = fullResponse.replace(/\n/g, '<br>') + `<span class="meta">FALSO · Streaming...</span>`;
+        if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
         this.voiceManager.processIncomingTokenStream(chunk);
       }
 
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      msgDiv.innerHTML = fullResponse.replace(/\n/g, '<br>') + `<span class="meta">FALSO · ${timeStr}</span>`;
       this.voiceManager.finalizeIncomingTokenStream();
     } catch(err) {
       console.error("[Chat Stream Error]", err);
