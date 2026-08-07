@@ -15,8 +15,11 @@ def clean_text_for_speech(text: str) -> str:
     if not text:
         return ""
 
+    # 0. Strip UI details blocks (expandable Sources section)
+    cleaned = re.sub(r'<details[\s\S]*?</details>', '', text, flags=re.IGNORECASE)
+
     # 1. Remove URLs (http, https, www)
-    cleaned = re.sub(r'https?://\S+|www\.\S+', '', text)
+    cleaned = re.sub(r'https?://\S+|www\.\S+', '', cleaned)
 
     # 2. Convert markdown links [title](url) -> title
     cleaned = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', cleaned)

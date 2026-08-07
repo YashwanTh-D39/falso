@@ -207,6 +207,39 @@ class BrainService:
                         logger.debug("Context: last_filename=%r", fc)
                         break
 
+                WEB_TOOLS = {"weather", "web_search", "maps", "github", "pypi"}
+                if tool_cls.name in WEB_TOOLS and result.success:
+                    tool_raw_facts = str(result.data)
+                    synthesis_messages = [
+                        {
+                            "role": "user",
+                            "content": (
+                                f"User question: {prompt_stripped}\n\n"
+                                f"Extracted Live Search Facts:\n{tool_raw_facts}\n\n"
+                                "INSTRUCTIONS:\n"
+                                "1. Answer the user's question directly in a clean, direct, natural, conversational way (like ChatGPT Voice).\n"
+                                "2. DO NOT write or read URLs, http, www, markdown links, or raw JSON in your primary conversational answer.\n"
+                                "3. If source URLs or provider names exist, place them ONLY at the very end in a `<details><summary>Sources</summary>...</details>` block so they render as an expandable link in the UI."
+                            )
+                        }
+                    ]
+
+                    logger.info("[WEB INTELLIGENCE] Synthesizing facts into conversational answer via LLM...")
+                    async for chunk in self.provider.stream_chat(synthesis_messages):
+                        text_content = chunk.text if hasattr(chunk, "text") else (chunk.content if hasattr(chunk, "content") else str(chunk))
+                        yield json.dumps({
+                            "model": self.model,
+                            "response": text_content,
+                            "done": False,
+                        }) + "\n"
+
+                    yield json.dumps({
+                        "model": self.model,
+                        "response": "",
+                        "done": True,
+                    }) + "\n"
+                    return
+
                 yield json.dumps({
                     "model": self.model,
                     "response": response_text,

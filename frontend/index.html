@@ -1039,7 +1039,8 @@
 
         function cleanTextForSpeech(raw) {
             if (!raw) return "";
-            let text = raw.replace(/https?:\/\/\S+|www\.\S+/g, '');
+            let text = raw.replace(/<details[\s\S]*?<\/details>/gi, '');
+            text = text.replace(/https?:\/\/\S+|www\.\S+/g, '');
             text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
             text = text.replace(/(?:Source|Retrieved|Confidence|Map Link):\s*\S+/gi, '');
             text = text.replace(/<[^>]+>/g, '');
