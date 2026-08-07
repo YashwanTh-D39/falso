@@ -221,34 +221,42 @@ export class SpatialObjectManager {
     }
   }
 
+  getMaterialForColor(hexColor) {
+    if (!this.materialCache.has(hexColor)) {
+      const mat = new this.THREE.MeshStandardMaterial({
+        color: hexColor,
+        roughness: 0.25,
+        metalness: 0.85,
+        transparent: true,
+        opacity: 0.95
+      });
+      this.materialCache.set(hexColor, mat);
+    }
+    return this.materialCache.get(hexColor);
+  }
+
   upsertEntity(id, data) {
+    const THREE = this.THREE;
     let entity = this.entities.get(id);
 
     if (!entity) {
-      const THREE = this.THREE;
       const group = new THREE.Group();
-
-      let geom = this.geometries.box;
-      let mat = this.materials.file;
+      let geom = this.geometries.sphere;
 
       if (data.type === 'app') {
         geom = this.geometries.octahedron;
-        mat = this.materials.app;
-      } else if (data.type === 'system') {
-        geom = this.geometries.ring;
-        mat = this.materials.system;
+      } else if (data.type === 'file') {
+        geom = this.geometries.box;
       } else if (data.type === 'folder') {
         geom = this.geometries.box;
-        mat = this.materials.folder;
       } else if (data.type === 'drive') {
         geom = this.geometries.cylinder;
-        mat = this.materials.drive;
+      } else if (data.type === 'system') {
+        geom = this.geometries.ring;
       }
 
-      const mesh = new THREE.Mesh(geom, mat.clone());
-      if (data.color) {
-        mesh.material.color.setHex(data.color);
-      }
+      const mat = this.getMaterialForColor(data.color || 0x00E5FF);
+      const mesh = new THREE.Mesh(geom, mat);
       group.add(mesh);
 
       // Add Canvas Sprite Label
@@ -258,7 +266,7 @@ export class SpatialObjectManager {
 
       // Orbit parameters per ring
       const ringIndex = data.ring || 3;
-      const baseRadius = 2.4 + ringIndex * 1.0;
+      const baseRadius = 1.4 + ringIndex * 1.1;
       const angle = Math.random() * Math.PI * 2;
       const speed = (0.04 + Math.random() * 0.04) * (ringIndex % 2 === 0 ? 1 : -1);
 
@@ -275,6 +283,7 @@ export class SpatialObjectManager {
 
       this.containerGroup.add(group);
       this.entities.set(id, entity);
+      window.renderedEntitiesCount = this.entities.size;
     } else {
       entity.data = data;
     }
@@ -288,8 +297,12 @@ export class SpatialObjectManager {
       const y = Math.sin(elapsed * 1.5 + entity.orbitAngle) * 0.15;
 
       entity.group.position.set(x, y, z);
-      entity.mesh.rotation.x += 0.5 * delta;
-      entity.mesh.rotation.y += 0.8 * delta;
+      entity.mesh.rotation.y += delta * 0.5;
+
+      // Distance culling for sprite labels (only show labels facing user)
+      if (entity.label) {
+        entity.label.visible = z > -entity.orbitRadius * 0.6;
+      }
     }
   }
 }

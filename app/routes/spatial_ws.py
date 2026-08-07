@@ -100,6 +100,10 @@ async def spatial_websocket_endpoint(websocket: WebSocket):
             len(entity_names), "\n".join(entity_names)
         )
 
+        # Reset broadcast payload hash to force immediate stream updates
+        global _last_payload_hash
+        _last_payload_hash = b""
+
         await websocket.send_bytes(orjson.dumps(init_payload))
 
         while True:
