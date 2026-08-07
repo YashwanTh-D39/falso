@@ -81,6 +81,13 @@ export class OrbManager {
     });
     const glowMesh = new THREE.Mesh(glowGeo, this.glowMat);
     this.orbGroup.add(glowMesh);
+
+    console.log('[ORB INIT VERIFICATION]');
+    console.log('  Clock initialized:', !!this.clock);
+    console.log('  Renderer initialized:', !!(this.rm && this.rm.renderer));
+    console.log('  Scene initialized:', !!(this.rm && this.rm.scene));
+    console.log('  Camera initialized:', !!(this.rm && this.rm.camera));
+    console.log('  OrbMesh initialized:', !!(this.orbGroup && this.innerCore));
   }
 
   updateState(newState) {
@@ -89,10 +96,14 @@ export class OrbManager {
   }
 
   animate(micLevel = 0) {
+    if (!this.clock) return;
+    if (!this.rm || !this.rm.scene) return;
+    if (!this.rm || !this.rm.camera) return;
+    if (!this.rm || !this.rm.renderer) return;
+    if (!this.orbGroup || !this.innerCore) return;
+
     const dt = this.clock.getDelta();
     const time = this.clock.getElapsedTime();
-
-    if (!this.orbGroup) return;
 
     this.outerShell.rotation.y += 0.001;
     this.outerShell.rotation.x += 0.0005;

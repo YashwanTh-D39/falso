@@ -80,14 +80,6 @@ export class RendererManager {
     this.composer.addPass(this.bloomPass);
     this.composer.addPass(this.caPass);
 
-    // Bright Red Test Sphere at (0,0,0) for camera/renderer verification
-    const testGeo = new THREE.SphereGeometry(0.35, 16, 16);
-    const testMat = new THREE.MeshBasicMaterial({ color: 0xFF0000, wireframe: true });
-    this.testSphere = new THREE.Mesh(testGeo, testMat);
-    this.testSphere.position.set(0, 0, 0);
-    this.scene.add(this.testSphere);
-    console.log('[TRACE] Bright red test sphere added at (0,0,0) -> Camera position:', this.camera.position);
-
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
@@ -98,7 +90,6 @@ export class RendererManager {
 
   render() {
     if (this.controls) this.controls.update();
-    if (this.testSphere) this.testSphere.rotation.y += 0.01;
 
     try {
       if (this.composer) {

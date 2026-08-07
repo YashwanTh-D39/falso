@@ -65,12 +65,7 @@ class BootManager {
       console.log('[BOOT] ✓ Renderer loaded');
       console.log('[BOOT] ✓ Canvas attached');
 
-      // 3. Start Animation Loop FIRST so rendering starts immediately
-      this.startAnimationLoop();
-      diagnosticsManager.setStage('animLoopStarted', 'OK');
-      console.log('[BOOT] ✓ Animation loop started');
-
-      // 4. OrbManager & Living Orb Mesh
+      // 3. OrbManager & Living Orb Mesh
       diagnosticsManager.setStage('orbManagerInstantiated', 'OK');
       console.log('[TRACE] 4. OrbManager instantiated');
 
@@ -88,11 +83,16 @@ class BootManager {
       diagnosticsManager.setStage('orbAddedToScene', 'OK');
       console.log('[BOOT] ✓ Living Orb created');
 
-      // 5. Spatial 3D Objects Manager & Fallback Entities
+      // 4. Spatial 3D Objects Manager & Fallback Entities
       this.spatialObjectManager = new SpatialObjectManager(rendererManager.scene, rendererManager.THREE);
       window.spatialObjectManager = this.spatialObjectManager;
       this.spatialObjectManager.ensureFallbackEntities();
       diagnosticsManager.setStage('nodesCreated', 'OK');
+
+      // 5. Start Animation Loop AFTER OrbManager is completely initialized
+      this.startAnimationLoop();
+      diagnosticsManager.setStage('animLoopStarted', 'OK');
+      console.log('[BOOT] ✓ Animation loop started');
       console.log('[BOOT] ✓ SpatialObjects initialized');
 
       // 6. WebSocket Connection & Packet Listener
