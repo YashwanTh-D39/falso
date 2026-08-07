@@ -687,7 +687,7 @@
         // Chat Streaming
         async function sendToFalso(text) {
             const lowerText = text.toLowerCase().trim();
-            if (lowerText.includes("show transcript") || lowerText.includes("show response")) {
+            if (lowerText.includes("show transcript") || lowerText.includes("show response") || lowerText.includes("show the answer") || lowerText.includes("display the response")) {
                 toggleTranscript();
                 return;
             }
@@ -1249,9 +1249,9 @@
             };
 
             speechRec.onspeechstart = () => {
-                console.log('[VAD] Speech detected');
+                console.log('[VAD] Human voice detected');
                 if (sysState === 'speaking' || isSpeakingSpeech) {
-                    console.log('[VAD] Human voice accepted');
+                    console.log('[TTS] Interrupted');
                     triggerVoiceInterruption();
                 } else if (sysState === 'idle' || sysState === 'sleeping') {
                     changeState('listening');

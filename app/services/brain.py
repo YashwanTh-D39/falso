@@ -209,6 +209,7 @@ class BrainService:
 
                 WEB_TOOLS = {"weather", "web_search", "maps", "github", "pypi"}
                 if tool_cls.name in WEB_TOOLS and result.success:
+                    logger.info("[WEB] Searching")
                     tool_raw_facts = str(result.data)
                     synthesis_messages = [
                         {
@@ -224,7 +225,8 @@ class BrainService:
                         }
                     ]
 
-                    logger.info("[WEB INTELLIGENCE] Synthesizing facts into conversational answer via LLM...")
+                    logger.info("[WEB] Summarized")
+                    logger.info("[TTS] Speaking summary")
                     async for chunk in self.provider.stream_chat(synthesis_messages):
                         text_content = chunk.text if hasattr(chunk, "text") else (chunk.content if hasattr(chunk, "content") else str(chunk))
                         yield json.dumps({
