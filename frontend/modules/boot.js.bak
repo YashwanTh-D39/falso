@@ -181,9 +181,6 @@ class BootManager {
 
   startAnimationLoop() {
     const clock = rendererManager.THREE ? new rendererManager.THREE.Clock() : null;
-    let orbErrorLogged = false;
-    let spatialErrorLogged = false;
-    let renderErrLogged = false;
 
     const animate = () => {
       requestAnimationFrame(animate);
@@ -192,48 +189,25 @@ class BootManager {
       const elapsed = clock ? clock.getElapsedTime() : performance.now() / 1000;
 
       // 1. Render Three.js Scene
-      if (!renderErrLogged) {
-        try {
-          rendererManager.render(elapsed);
-        } catch (err) {
-          renderErrLogged = true;
-          console.error('[RenderGuard] Scene render error:', err);
-        }
-      }
+      rendererManager.render(elapsed);
 
       // 2. Animate Living Orb
-      if (!orbErrorLogged) {
-        try {
-          orbManager.animate(window.micLevel || 0);
-        } catch (err) {
-          orbErrorLogged = true;
-          console.error('[RenderGuard] Orb animation error caught:', err);
-        }
-      }
+      orbManager.animate(window.micLevel || 0);
 
       // 3. Update 3D Orbiting Objects
-      if (this.spatialObjectManager && !spatialErrorLogged) {
-        try {
-          this.spatialObjectManager.update(delta, elapsed);
-        } catch (err) {
-          spatialErrorLogged = true;
-          console.error('[RenderGuard] Spatial objects update error caught:', err);
-        }
+      if (this.spatialObjectManager) {
+        this.spatialObjectManager.update(delta, elapsed);
       }
 
       // 4. Throttled Diagnostics HUD (1 FPS)
-      try {
-        if (diagnosticsManager.tickFPS()) {
-          const wsConn = this.spatialWSClient && this.spatialWSClient.ws && this.spatialWSClient.ws.readyState === 1;
-          diagnosticsManager.renderHUD(
-            this.voiceManager ? this.voiceManager.sysState : 'idle',
-            this.voiceManager ? this.voiceManager.isSpeakingSpeech : false,
-            this.voiceManager ? this.voiceManager.micActive : false,
-            wsConn
-          );
-        }
-      } catch (err) {
-        // Silently swallow HUD rendering exceptions
+      if (diagnosticsManager.tickFPS()) {
+        const wsConn = this.spatialWSClient && this.spatialWSClient.ws && this.spatialWSClient.ws.readyState === 1;
+        diagnosticsManager.renderHUD(
+          this.voiceManager ? this.voiceManager.sysState : 'idle',
+          this.voiceManager ? this.voiceManager.isSpeakingSpeech : false,
+          this.voiceManager ? this.voiceManager.micActive : false,
+          wsConn
+        );
       }
     };
 

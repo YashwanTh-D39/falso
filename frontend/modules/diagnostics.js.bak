@@ -59,34 +59,11 @@ export class DiagnosticsManager {
   }
 
   renderHUD(sysState, isSpeakingSpeech, micActive, wsConnected) {
-    const rCount = window.renderedEntitiesCount || this.renderedEntitiesCount || 0;
-    const secondsAgo = Math.round((Date.now() - (this.lastWsUpdateTime || Date.now())) / 1000);
-
-    const fpsVal = document.getElementById('fpsVal');
-    if (fpsVal) fpsVal.textContent = `${this.currentFPS} / 60`;
-
-    const lastUpdate = document.getElementById('lastUpdate');
-    if (lastUpdate) lastUpdate.textContent = `${secondsAgo}s ago`;
-
-    const renderedVal = document.getElementById('renderedVal');
-    if (renderedVal) renderedVal.textContent = `${rCount}`;
-
-    const wsStatus = document.getElementById('wsStatus');
-    if (wsStatus) {
-      wsStatus.className = wsConnected ? 'ok' : '';
-      wsStatus.textContent = wsConnected ? 'Connected' : 'Connecting...';
-    }
-
-    const stateVal = document.getElementById('stateVal');
-    if (stateVal && sysState) {
-      const stateLower = String(sysState).toLowerCase();
-      stateVal.className = `state-pill state-${stateLower}`;
-      stateVal.textContent = String(sysState).toUpperCase();
-    }
-
     const diag = document.getElementById('diag-content');
     if (!diag) return;
 
+    const secondsAgo = Math.round((Date.now() - (this.lastWsUpdateTime || Date.now())) / 1000);
+    const rCount = window.renderedEntitiesCount || this.renderedEntitiesCount || 0;
     const frameTimeMs = (1000 / Math.max(this.currentFPS, 1)).toFixed(1);
 
     const esc = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
