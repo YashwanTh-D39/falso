@@ -145,17 +145,27 @@ class BrainService:
                 }) + "\n"
                 return
 
-        # ── Fast-path Intent Classification ──
-        casual_greetings = {
+        # ── Fast-path Intent Classification for Simple Questions & Casual Chat ──
+        casual_triggers = (
             "hello", "hi", "hey", "howdy", "greetings", "good morning",
             "good afternoon", "good evening", "how are you", "who are you",
-            "what can you do", "what's up", "whats up", "tell me a joke"
-        }
+            "what can you do", "what's up", "whats up", "tell me a joke",
+            "what is 2+2", "2+2", "who made you", "who created you"
+        )
         clean_prompt = prompt_lower.strip(".,!?;: ")
-        is_casual = clean_prompt in casual_greetings or any(clean_prompt.startswith(g) for g in ("hello", "hi ", "hey ", "good morning", "good evening"))
+        is_casual = (
+            clean_prompt in casual_triggers
+            or any(clean_prompt.startswith(g) for g in ("hello", "hi ", "hey ", "good morning", "good evening", "tell me a joke", "what is 2+2"))
+        )
 
-        if not is_casual:
-            # ── Phase 1: Route to a registered tool if prompt requires local action ──
+        # Explicit tool trigger check to prevent unnecessary tool inspection on general questions
+        is_explicit_tool_request = any(kw in clean_prompt for kw in (
+            "weather in", "weather for", "temperature in", "search web", "google ", "look up ",
+            "open file", "delete file", "kill process", "list files", "cpu ", "ram ", "system stats"
+        ))
+
+        if not is_casual and is_explicit_tool_request:
+            # ── Phase 1: Route to a registered tool if explicitly requested ──
             for tool_def in ToolRegistry.list():
                 tool_cls = ToolRegistry.get(tool_def["name"])
                 if tool_cls is None:
