@@ -13,16 +13,24 @@ import psutil
 
 logger = logging.getLogger(__name__)
 
-# Check NVIDIA GPU availability gracefully
+# Check NVIDIA GPU availability lazily
 HAS_NVIDIA = False
-try:
-    import pynvml
-    pynvml.nvmlInit()
-    HAS_NVIDIA = True
-    logger.info("NVIDIA NVML initialized successfully.")
-except Exception as e:
-    logger.info(f"NVIDIA NVML not available or error: {e}")
-    HAS_NVIDIA = False
+_NVIDIA_CHECKED = False
+
+def _check_nvidia_gpu() -> bool:
+    global HAS_NVIDIA, _NVIDIA_CHECKED
+    if _NVIDIA_CHECKED:
+        return HAS_NVIDIA
+    _NVIDIA_CHECKED = True
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        HAS_NVIDIA = True
+        logger.info("NVIDIA NVML initialized successfully.")
+    except Exception as e:
+        logger.info(f"NVIDIA NVML not available: {e}")
+        HAS_NVIDIA = False
+    return HAS_NVIDIA
 
 
 class SystemMonitorService:
