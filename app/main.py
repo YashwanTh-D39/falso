@@ -63,18 +63,18 @@ async def lifespan(app: FastAPI):
         try:
             import httpx
             async with httpx.AsyncClient(timeout=3.0) as client:
-                res = await asyncio.wait_for(
-                    client.get(f"{settings.ollama_base_url}/api/tags"),
-                    timeout=2.0
-                )
+                res = await client.get(f"{settings.ollama_base_url}/api/tags")
                 if res.status_code == 200:
-                    # Warm up model asynchronously so weights remain preloaded in GPU VRAM
-                    asyncio.create_task(
-                        client.post(
-                            f"{settings.ollama_base_url}/api/generate",
-                            json={"model": settings.ollama_model, "prompt": "", "keep_alive": "24h"}
-                        )
-                    )
+                    async def _warmup():
+                        try:
+                            async with httpx.AsyncClient(timeout=10.0) as warm_client:
+                                await warm_client.post(
+                                    f"{settings.ollama_base_url}/api/generate",
+                                    json={"model": settings.ollama_model, "prompt": "", "keep_alive": "24h"}
+                                )
+                        except Exception:
+                            pass
+                    asyncio.create_task(_warmup())
                     msg = f"Ollama Warm & Online ({settings.ollama_model})"
                 else:
                     msg = f"HTTP {res.status_code}"
