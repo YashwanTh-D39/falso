@@ -22,14 +22,7 @@ export class SpatialObjectManager {
   }
 
   ensureFallbackEntities() {
-    if (this.entities.size === 0) {
-      console.log('[SpatialOS] Zero backend entities available -> Rendering fallback system entities');
-      const fallbacks = [
-        { id: 'fallback_core', type: 'system', name: 'FALSO Core', label: 'FALSO Core (Waiting...)', status: 'Waiting for live system entities...', ring: 1, color: 0x00E5FF },
-        { id: 'fallback_sys', type: 'app', name: 'System Monitor', label: 'System Monitor', status: 'Connecting to Spatial WS...', ring: 2, color: 0x29B6F6 }
-      ];
-      fallbacks.forEach(item => this.upsertEntity(item.id, item));
-    }
+    // No-op: Do not render fallback objects around the orb core
   }
 
   initSharedResources() {
@@ -56,45 +49,6 @@ export class SpatialObjectManager {
     const MAX_VISIBLE_ENTITIES = 15;
 
     const ctx = state.context || {};
-    const currentProj = ctx.project || 'Project-Falso';
-    const activeWin = ctx.active_window || 'VS Code';
-    const activeFile = ctx.active_file || 'index.html';
-
-    // 1. Active Window / IDE (Priority 90)
-    candidates.push({
-      id: 'entity_active_window',
-      type: 'app',
-      name: activeWin,
-      label: activeWin.length > 20 ? activeWin.substring(0, 17) + '...' : activeWin,
-      status: `Active Window: ${activeWin}`,
-      ring: 1,
-      color: 0x7DF9FF,
-      priority: 90
-    });
-
-    // 2. Active Project (Priority 85)
-    candidates.push({
-      id: 'entity_active_project',
-      type: 'system',
-      name: currentProj,
-      label: `Project: ${currentProj}`,
-      status: `Git Branch: ${ctx.git_branch || 'main'}`,
-      ring: 1,
-      color: 0x00E5FF,
-      priority: 85
-    });
-
-    // 3. Active File (Priority 80)
-    candidates.push({
-      id: 'entity_active_file',
-      type: 'file',
-      name: activeFile,
-      label: `File: ${activeFile}`,
-      status: `Editing File: ${activeFile}`,
-      ring: 1,
-      color: 0x4FC3F7,
-      priority: 80
-    });
 
     // Deduplicate running processes into high-value application nodes
     if (state.processes) {
