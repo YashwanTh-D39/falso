@@ -100,10 +100,11 @@ class BrainService:
         return response
 
     async def chat(self, prompt: str, *, history: list[ChatMessage] | None = None):
+        t_start = time.perf_counter()
         prompt_stripped = prompt.strip()
         prompt_lower = prompt_stripped.lower()
 
-        logger.info("Chat with model %s, prompt=%r", self.model, prompt_stripped)
+        logger.info("[LATENCY] backend_received | prompt=%r", prompt_stripped)
 
         # ── Phase 0: Handle pending action before anything else ──
         if self.context.has_pending:
@@ -144,113 +145,95 @@ class BrainService:
                 }) + "\n"
                 return
 
-            # Unrelated message — keep pending action alive, fall through to normal routing
+        # ── Fast-path Intent Classification ──
+        casual_greetings = {
+            "hello", "hi", "hey", "howdy", "greetings", "good morning",
+            "good afternoon", "good evening", "how are you", "who are you",
+            "what can you do", "what's up", "whats up", "tell me a joke"
+        }
+        clean_prompt = prompt_lower.strip(".,!?;: ")
+        is_casual = clean_prompt in casual_greetings or any(clean_prompt.startswith(g) for g in ("hello", "hi ", "hey ", "good morning", "good evening"))
 
-        # ── Phase 1: Route to a registered tool ──
-        for tool_def in ToolRegistry.list():
-            tool_cls = ToolRegistry.get(tool_def["name"])
-            if tool_cls is None:
-                continue
+        if not is_casual:
+            # ── Phase 1: Route to a registered tool if prompt requires local action ──
+            for tool_def in ToolRegistry.list():
+                tool_cls = ToolRegistry.get(tool_def["name"])
+                if tool_cls is None:
+                    continue
 
-            kwargs = tool_cls.match_prompt(prompt_stripped, self.context)
-            if kwargs is not None:
-                logger.debug(
-                    "Intent: %s | Selected tool: %s | Params: %s",
-                    kwargs.get("command", "?"), tool_cls.name, kwargs,
-                )
-                yield json.dumps({
-                    "type": "tool_start",
-                    "tool": tool_cls.name,
-                    "action": kwargs.get("command", "execute"),
-                    "detail": kwargs.get("path") or kwargs.get("new_name") or "",
-                }) + "\n"
-                result = await self.tool_manager.execute(tool_cls.name, **kwargs)
-                response_text = tool_cls.format_result(result)
-                if isinstance(result.data, dict):
-                    diagnostic = (
-                        result.data.get("message")
-                        or result.data.get("error")
-                        or response_text[:80]
-                    )
-                else:
-                    diagnostic = response_text[:80]
-                logger.debug(
-                    "Tool result: success=%s | %s",
-                    result.success, diagnostic,
-                )
+                kwargs = tool_cls.match_prompt(prompt_stripped, self.context)
+                if kwargs is not None:
+                    logger.info("[LATENCY] tool_matched | tool=%s | t=%.3fs", tool_cls.name, time.perf_counter() - t_start)
+                    yield json.dumps({
+                        "type": "tool_start",
+                        "tool": tool_cls.name,
+                        "action": kwargs.get("command", "execute"),
+                        "detail": kwargs.get("path") or kwargs.get("new_name") or "",
+                    }) + "\n"
+                    result = await self.tool_manager.execute(tool_cls.name, **kwargs)
+                    response_text = tool_cls.format_result(result)
+                    if isinstance(result.data, dict):
+                        diagnostic = (
+                            result.data.get("message")
+                            or result.data.get("error")
+                            or response_text[:80]
+                        )
+                    else:
+                        diagnostic = response_text[:80]
 
-                # ── Store pending action if confirmation is required ──
-                if isinstance(result.data, dict) and result.data.get("confirmation_required"):
-                    self.context.store_pending(
-                        tool=tool_cls.name,
-                        intent=kwargs.get("command", "?"),
-                        args=kwargs,
-                        confirmation_required=True,
-                    )
-                    logger.debug(
-                        "Pending action created | tool=%s intent=%s args=%s",
-                        tool_cls.name, kwargs.get("command", "?"), kwargs,
-                    )
-                else:
-                    self.context.clear_pending()
+                    # Store pending action if confirmation is required
+                    if isinstance(result.data, dict) and result.data.get("confirmation_required"):
+                        self.context.store_pending(
+                            tool=tool_cls.name,
+                            intent=kwargs.get("command", "?"),
+                            args=kwargs,
+                            confirmation_required=True,
+                        )
+                    else:
+                        self.context.clear_pending()
 
-                # Store filename for pronoun resolution
-                file_candidates = [
-                    result.data.get("path") if isinstance(result.data, dict) else None,
-                    result.data.get("from") if isinstance(result.data, dict) else None,
-                    kwargs.get("path"),
-                    kwargs.get("new_name"),
-                ]
-                for fc in file_candidates:
-                    if fc:
-                        self.context.last_filename = fc
-                        logger.debug("Context: last_filename=%r", fc)
-                        break
+                    WEB_TOOLS = {"weather", "web_search", "maps", "github", "pypi"}
+                    if tool_cls.name in WEB_TOOLS and result.success:
+                        logger.info("[WEB] Searching")
+                        tool_raw_facts = str(result.data)
+                        synthesis_messages = [
+                            {
+                                "role": "user",
+                                "content": (
+                                    f"User question: {prompt_stripped}\n\n"
+                                    f"Extracted Live Search Facts:\n{tool_raw_facts}\n\n"
+                                    "INSTRUCTIONS:\n"
+                                    "1. Answer the user's question directly in a clean, direct, natural, conversational way (like ChatGPT Voice).\n"
+                                    "2. DO NOT write or read URLs, http, www, markdown links, or raw JSON in your primary conversational answer.\n"
+                                    "3. If source URLs or provider names exist, place them ONLY at the very end in a `<details><summary>Sources</summary>...</details>` block so they render as an expandable link in the UI."
+                                )
+                            }
+                        ]
 
-                WEB_TOOLS = {"weather", "web_search", "maps", "github", "pypi"}
-                if tool_cls.name in WEB_TOOLS and result.success:
-                    logger.info("[WEB] Searching")
-                    tool_raw_facts = str(result.data)
-                    synthesis_messages = [
-                        {
-                            "role": "user",
-                            "content": (
-                                f"User question: {prompt_stripped}\n\n"
-                                f"Extracted Live Search Facts:\n{tool_raw_facts}\n\n"
-                                "INSTRUCTIONS:\n"
-                                "1. Answer the user's question directly in a clean, direct, natural, conversational way (like ChatGPT Voice).\n"
-                                "2. DO NOT write or read URLs, http, www, markdown links, or raw JSON in your primary conversational answer.\n"
-                                "3. If source URLs or provider names exist, place them ONLY at the very end in a `<details><summary>Sources</summary>...</details>` block so they render as an expandable link in the UI."
-                            )
-                        }
-                    ]
+                        async for chunk in self.provider.stream_chat(synthesis_messages):
+                            text_content = chunk.text if hasattr(chunk, "text") else (chunk.content if hasattr(chunk, "content") else str(chunk))
+                            yield json.dumps({
+                                "model": self.model,
+                                "response": text_content,
+                                "done": False,
+                            }) + "\n"
 
-                    logger.info("[WEB] Summarized")
-                    logger.info("[TTS] Speaking summary")
-                    async for chunk in self.provider.stream_chat(synthesis_messages):
-                        text_content = chunk.text if hasattr(chunk, "text") else (chunk.content if hasattr(chunk, "content") else str(chunk))
                         yield json.dumps({
                             "model": self.model,
-                            "response": text_content,
-                            "done": False,
+                            "response": "",
+                            "done": True,
                         }) + "\n"
+                        return
 
                     yield json.dumps({
                         "model": self.model,
-                        "response": "",
+                        "response": response_text,
                         "done": True,
                     }) + "\n"
                     return
 
-                yield json.dumps({
-                    "model": self.model,
-                    "response": response_text,
-                    "done": True,
-                }) + "\n"
-                return
-
-        # ── Phase 2: No tool matched — stream from the AI provider ──
-        logger.debug("No tool matched → routing to AI provider %s", self.provider.name)
+        # ── Phase 2: Casual Chat or LLM Completion Stream ──
+        logger.info("[LATENCY] ollama_started | prompt=%r | t=%.3fs", prompt_stripped, time.perf_counter() - t_start)
         messages = []
         system_prompt = self.personality_engine.build_prompt(
             runtime_context=RuntimeContext(
@@ -266,7 +249,6 @@ class BrainService:
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
 
-        # ── Sliding-window history truncation ──
         if history:
             max_msgs = settings.max_history_messages
             truncated = history[-max_msgs:] if len(history) > max_msgs else history
@@ -274,24 +256,22 @@ class BrainService:
                 messages.append({"role": msg.role, "content": msg.content})
 
         messages.append({"role": "user", "content": prompt_stripped})
-        start_time = time.perf_counter()
         first_token_received = False
         try:
-            # stream_chat is a provider-agnostic async generator; each vendor
-            # maps these OpenAI-style messages to its native request.
             async for chunk in self.provider.stream_chat(messages):
                 if chunk.text:
                     if not first_token_received:
-                        self.last_first_token_latency = time.perf_counter() - start_time
+                        first_token_latency = time.perf_counter() - t_start
+                        self.last_first_token_latency = first_token_latency
                         first_token_received = True
-                        logger.info("First LLM token received in %.3fs", self.last_first_token_latency)
+                        logger.info("[LATENCY] first_token | t=%.3fs", first_token_latency)
                     yield json.dumps({
                         "model": self.model,
                         "response": chunk.text,
                         "done": False,
                     }) + "\n"
-            # Always terminate with a done line — the UI relies on it, and it
-            # keeps the frontend contract identical across every provider.
+            
+            logger.info("[LATENCY] stream_completed | t=%.3fs", time.perf_counter() - t_start)
             yield json.dumps({
                 "model": self.model,
                 "response": "",

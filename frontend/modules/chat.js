@@ -82,13 +82,15 @@ export class ChatManager {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
 
+      let lineBuffer = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const rawChunk = decoder.decode(value, { stream: true });
+        lineBuffer += decoder.decode(value, { stream: true });
         
-        // Parse NDJSON lines or SSE data lines
-        const lines = rawChunk.split('\n');
+        const lines = lineBuffer.split('\n');
+        lineBuffer = lines.pop(); // Keep incomplete trailing fragment in buffer
+
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
@@ -109,6 +111,18 @@ export class ChatManager {
             this.voiceManager.processIncomingTokenStream(textSnippet);
           }
         }
+      }
+
+      if (lineBuffer.trim()) {
+        try {
+          const jsonStr = lineBuffer.trim().startsWith("data: ") ? lineBuffer.trim().slice(6) : lineBuffer.trim();
+          const parsed = JSON.parse(jsonStr);
+          const textSnippet = parsed.response || parsed.chunk || parsed.text || "";
+          if (textSnippet) {
+            fullResponse += textSnippet;
+            this.voiceManager.processIncomingTokenStream(textSnippet);
+          }
+        } catch(e) {}
       }
 
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
