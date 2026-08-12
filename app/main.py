@@ -21,8 +21,8 @@ from app.routes.spatial_ws import router as spatial_ws_router, spatial_broadcast
 from app.routes.user_profile import router as user_profile_router
 from app.routes.tasks import router as tasks_router
 from app.services.proactive_agent import proactive_agent
-from app.services.system_monitor import system_monitor
 from app.services.filesystem_indexer import filesystem_indexer
+from app.services.boot_tracker import boot_tracker
 from config.logging import setup_logging
 from config.settings import settings
 
@@ -67,11 +67,8 @@ async def lifespan(app: FastAPI):
                 if res.status_code == 200:
                     async def _warmup():
                         try:
-                            async with httpx.AsyncClient(timeout=10.0) as warm_client:
-                                await warm_client.post(
-                                    f"{settings.ollama_base_url}/api/generate",
-                                    json={"model": settings.ollama_model, "prompt": "", "keep_alive": "24h"}
-                                )
+                            from app.routes.brain import brain_service
+                            await brain_service.provider.warm()
                         except Exception:
                             pass
                     asyncio.create_task(_warmup())
@@ -132,17 +129,26 @@ async def lifespan(app: FastAPI):
     boot_tracker.start_stage(9)
     boot_tracker.end_stage(9, "Awaiting Frontend Handshake")
 
-    # Non-blocking background warmup for local LLM
-    if settings.ai_provider == "ollama":
-        from app.routes.brain import brain_service
-        async def _warmup():
-            try:
-                async for _ in brain_service.provider.stream_chat([{"role": "user", "content": "warmup"}]):
-                    break
-            except Exception as exc:
-                logger.debug("Ollama background warmup info: %s", exc)
+    # Keep-alive pin for the local LLM: cheap warm pings every 5 minutes keep
+    # the model resident so every user chat starts from a warm first token
+    # (guards against `ollama stop` / Ollama restarts mid-session).
+    keep_alive_pinned = False
 
-        asyncio.create_task(_warmup())
+    async def _ollama_keepalive_loop():
+        nonlocal keep_alive_pinned
+        while True:
+            try:
+                from app.routes.brain import brain_service
+                was_pinned = keep_alive_pinned
+                keep_alive_pinned = await brain_service.provider.warm()
+                if not was_pinned and keep_alive_pinned:
+                    logger.info("Ollama model pinned warm (keep-alive loop)")
+            except Exception as exc:
+                logger.debug("Ollama keep-alive info: %s", exc)
+            await asyncio.sleep(300)
+
+    if settings.ai_provider == "ollama":
+        asyncio.create_task(_ollama_keepalive_loop())
 
     logger.info("Falso Core API booted successfully — ready for frontend connection.")
 

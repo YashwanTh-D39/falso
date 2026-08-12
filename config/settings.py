@@ -17,19 +17,35 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
-    # AI provider
-    # Backend that powers free-form chat. The UI and Brain service are
-    # provider-agnostic: this value selects which class the provider factory
-    # instantiates. Options:
-    #   ollama  (default — local Ollama)
-    #   gemini  (optional — Google AI Studio / Gemini API)
-    #   openai  (optional — OpenAI, cloud)
-    ai_provider: str = "ollama"
+    # AI provider configuration
+    ai_provider: str = "nvidia"
+    llm_provider: str = ""
+    llm_fallback_provider: str = "ollama"
     ai_timeout_seconds: float = Field(default=300.0, gt=0.0)
     ai_max_retries: int = Field(default=3, ge=0)
     # Maximum number of conversation history messages forwarded to the LLM.
     # Older messages beyond this window are dropped to prevent token overflow.
     max_history_messages: int = Field(default=50, ge=1)
+
+    # NVIDIA Nemotron API Configuration
+    nvidia_inference_api_key: str = ""
+    nvidia_api_key: str = ""
+    nvidia_model: str = "nvidia/llama-3.1-nemotron-70b-instruct"
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+
+    @property
+    def effective_ai_provider(self) -> str:
+        prov = (self.llm_provider or self.ai_provider or "nvidia").strip().lower()
+        return prov
+
+    @property
+    def effective_fallback_provider(self) -> str:
+        return (self.llm_fallback_provider or "").strip().lower()
+
+    @property
+    def effective_nvidia_api_key(self) -> str:
+        return (self.nvidia_inference_api_key or self.nvidia_api_key or "").strip()
+
 
     # Gemini (default primary AI provider — Google AI Studio / Gemini API)
     # API key from https://aistudio.google.com/app/apikey.

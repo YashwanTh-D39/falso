@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, status
@@ -10,6 +11,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["Brain"])
 brain_service = BrainService()
+
+
+@router.post("/chat/warmup")
+async def chat_warmup():
+    """Fire-and-forget Ollama warm: pre-loads the model so the first chat
+    message streams back instantly instead of paying the model-load cost."""
+    provider = brain_service.provider
+    from config.settings import settings
+    if settings.ai_provider != "ollama" or not hasattr(provider, "warm"):
+        return {"status": "noop"}
+
+    async def _warm():
+        await provider.warm()
+
+    asyncio.create_task(_warm())
+    return {"status": "warming"}
 
 
 @router.post("/chat")

@@ -17,6 +17,7 @@ from typing import Any
 
 from app.providers.base import AIProviderError, BaseAIProvider
 from app.providers.gemini import GeminiProvider
+from app.providers.nvidia import NVIDIAProvider
 from app.providers.ollama import OllamaProvider
 
 logger = logging.getLogger(__name__)
@@ -49,17 +50,35 @@ build = {
         api_key=getattr(s, "gemini_api_key", ""),
         base_url=getattr(s, "gemini_base_url", None),
     ),
+    "nvidia": lambda s: NVIDIAProvider(
+        model=getattr(s, "nvidia_model", "nvidia/llama-3.1-nemotron-70b-instruct"),
+        api_key=getattr(
+            s,
+            "effective_nvidia_api_key",
+            getattr(s, "nvidia_inference_api_key", getattr(s, "nvidia_api_key", "")),
+        ),
+        base_url=getattr(s, "nvidia_base_url", "https://integrate.api.nvidia.com/v1"),
+    ),
     "ollama": lambda s: OllamaProvider(
-        model=s.ollama_model,
-        base_url=s.ollama_base_url,
+        model=getattr(s, "ollama_model", "gemma3:4b"),
+        base_url=getattr(s, "ollama_base_url", "http://localhost:11434"),
     ),
     "openai": _build_openai_provider,
 }
 
 
-def build_provider(settings: Any) -> BaseAIProvider:
-    """Instantiate the provider named by ``settings.ai_provider``."""
-    name = (getattr(settings, "ai_provider", "ollama") or "ollama").strip().lower() or "ollama"
+def build_provider(settings: Any, provider_name: str | None = None) -> BaseAIProvider:
+    """Instantiate the provider named by ``provider_name`` or ``settings``."""
+    if provider_name:
+        name = provider_name.strip().lower()
+    else:
+        name = (
+            getattr(settings, "effective_ai_provider", None)
+            or getattr(settings, "llm_provider", None)
+            or getattr(settings, "ai_provider", "nvidia")
+            or "nvidia"
+        ).strip().lower()
+
     factory: Callable[[Any], BaseAIProvider] | None = build.get(name)
     if factory is None:
         raise UnknownProviderError(

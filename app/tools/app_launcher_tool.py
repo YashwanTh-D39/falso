@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import webbrowser
 from typing import Any, Dict
@@ -18,6 +19,14 @@ from app.tools.base import Tool, ToolResult
 from app.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+_LAUNCHABLE = (
+    "vs code", "vscode", "visual studio code",
+    "chrome", "google chrome",
+    "notepad", "explorer", "file explorer",
+    "terminal", "powershell", "cmd", "command prompt",
+    "firefox", "edge", "word", "excel", "calculator", "calc", "paint",
+)
 
 
 @ToolRegistry.register
@@ -40,6 +49,19 @@ class AppLauncherTool(Tool):
         "required": ["action", "target"]
     }
 
+    @classmethod
+    def match_prompt(cls, prompt: str, context: Any = None) -> dict | None:
+        """Strict matcher: only literal app-launch phrases, so this tool never
+        hijacks file reads/searches that merely contain the word 'open'."""
+        prompt_lower = prompt.lower().strip()
+        m = re.search(
+            r'\b(?:open|launch|start|run)\s+(?:the\s+)?(' + r"|".join(map(re.escape, _LAUNCHABLE)) + r')',
+            prompt_lower,
+        )
+        if not m:
+            return None
+        return {"action": "open_app", "target": m.group(1).strip()}
+
     async def execute(self, action: str, target: str, **kwargs: Any) -> ToolResult:
         target_clean = target.strip()
         
@@ -56,11 +78,18 @@ class AppLauncherTool(Tool):
         elif action == "open_app":
             app_map = {
                 "chrome": "chrome.exe",
+                "google chrome": "chrome.exe",
                 "explorer": "explorer.exe",
+                "file explorer": "explorer.exe",
                 "code": "code",
+                "vs code": "code",
                 "vscode": "code",
+                "visual studio code": "code",
                 "notepad": "notepad.exe",
-                "terminal": "powershell.exe"
+                "terminal": "powershell.exe",
+                "powershell": "powershell.exe",
+                "cmd": "cmd.exe",
+                "command prompt": "cmd.exe",
             }
             exe = app_map.get(target_clean.lower(), target_clean)
             try:

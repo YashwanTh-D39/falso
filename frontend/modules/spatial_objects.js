@@ -46,7 +46,16 @@ export class SpatialObjectManager {
 
   syncWithState(state) {
     const candidates = [];
-    const MAX_VISIBLE_ENTITIES = 15;
+    const MAX_VISIBLE_ENTITIES = 12;
+    const SUPPRESSED_ENTITY_IDS = new Set([
+      'entity_active_window',
+      'entity_active_project',
+      'fallback_core',
+      'fallback_entity',
+      'decorative_core',
+      'proj_root',
+      'ctx_active_window'
+    ]);
 
     const ctx = state.context || {};
 
@@ -133,9 +142,11 @@ export class SpatialObjectManager {
       });
     }
 
-    // Sort by Priority Descending & Enforce Hard Budget MAX_VISIBLE_ENTITIES = 15
-    candidates.sort((a, b) => b.priority - a.priority);
-    const selected = candidates.slice(0, MAX_VISIBLE_ENTITIES);
+    // Filter out decorative/fallback entities and nodes that would obscure
+    // the orb core, then sort by priority and enforce the visibility budget.
+    const filtered = candidates.filter(item => !SUPPRESSED_ENTITY_IDS.has(item.id));
+    filtered.sort((a, b) => b.priority - a.priority);
+    const selected = filtered.slice(0, MAX_VISIBLE_ENTITIES);
 
     const activeIds = new Set();
     selected.forEach(item => {

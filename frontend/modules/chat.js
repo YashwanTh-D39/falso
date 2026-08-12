@@ -58,6 +58,9 @@ export class ChatManager {
     this.voiceManager.clearAudioStreamingQueue();
     this.voiceManager.stopActiveAudioPlayback();
 
+    const t0 = performance.now();
+    console.log(`[CHAT] REQUEST_SENT +0ms`);
+
     const chatContainer = document.getElementById('chatlog') || document.getElementById('chat-area');
     const msgDiv = document.createElement('div');
     msgDiv.className = 'msg ai';
@@ -66,12 +69,15 @@ export class ChatManager {
     }
 
     let fullResponse = "";
+    let firstTokenRendered = false;
     try {
       const res = await fetch(API_BASE + '/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: text, message: text })
       });
+
+      console.log(`[CHAT] BACKEND_HEADERS_RECEIVED +${Math.round(performance.now() - t0)}ms`);
 
       if (!res.ok) {
         msgDiv.textContent = "[Error contacting FALSO Core]";
@@ -105,6 +111,10 @@ export class ChatManager {
           }
 
           if (textSnippet) {
+            if (!firstTokenRendered) {
+              firstTokenRendered = true;
+              console.log(`[CHAT] FRONTEND_FIRST_TOKEN +${Math.round(performance.now() - t0)}ms`);
+            }
             fullResponse += textSnippet;
             msgDiv.innerHTML = fullResponse.replace(/\n/g, '<br>') + `<span class="meta">FALSO · Streaming...</span>`;
             if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -119,11 +129,17 @@ export class ChatManager {
           const parsed = JSON.parse(jsonStr);
           const textSnippet = parsed.response || parsed.chunk || parsed.text || "";
           if (textSnippet) {
+            if (!firstTokenRendered) {
+              firstTokenRendered = true;
+              console.log(`[CHAT] FRONTEND_FIRST_TOKEN +${Math.round(performance.now() - t0)}ms`);
+            }
             fullResponse += textSnippet;
             this.voiceManager.processIncomingTokenStream(textSnippet);
           }
         } catch(e) {}
       }
+
+      console.log(`[CHAT] RESPONSE_COMPLETE +${Math.round(performance.now() - t0)}ms`);
 
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       msgDiv.innerHTML = fullResponse.replace(/\n/g, '<br>') + `<span class="meta">FALSO · ${timeStr}</span>`;

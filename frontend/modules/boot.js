@@ -12,6 +12,8 @@ import { settingsManager } from './settings.js';
 import { VoiceManager } from './voice.js';
 import { ChatManager } from './chat.js';
 
+const API_WARM_URL = window.location.origin + '/api/v1/chat/warmup';
+
 class BootManager {
   constructor() {
     this.initialized = false;
@@ -140,6 +142,10 @@ class BootManager {
 
       this.voiceManager.changeState('idle');
       console.log('[BOOT] ✓ All startup steps complete -> Living Orb rendering!');
+
+      // Non-blocking warm: pins the local LLM so the first chat streams
+      // immediately instead of paying the model-load cost.
+      fetch(API_WARM_URL, { method: 'POST' }).catch(() => {});
     } catch (bootErr) {
       console.error('[BOOT] FAILED STEP:', bootErr.name || 'StartupError');
       console.error('Reason:', bootErr.message);

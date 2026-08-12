@@ -42,10 +42,14 @@ class OllamaProvider(BaseAIProvider):
         self.base_url = base_url.rstrip("/")
         self._client: httpx.AsyncClient | None = None
 
-    def _get_client(self) -> httpx.AsyncClient:
-        from config.settings import settings
-        timeout = httpx.Timeout(settings.ai_timeout_seconds, connect=5.0, read=30.0)
-        return httpx.AsyncClient(timeout=timeout)
+    @property
+    def client(self) -> httpx.AsyncClient:
+        """Lazily-created persistent client: TCP connection reuse across chats."""
+        if self._client is None or self._client.is_closed:
+            from config.settings import settings
+            timeout = httpx.Timeout(settings.ai_timeout_seconds, connect=5.0, read=30.0)
+            self._client = httpx.AsyncClient(timeout=timeout)
+        return self._client
 
     async def aclose(self) -> None:
         """Explicitly close the underlying HTTP client."""
@@ -54,39 +58,56 @@ class OllamaProvider(BaseAIProvider):
             self._client = None
 
     async def stream_chat(self, messages: list[dict]) -> AsyncIterator[ProviderChunk]:
-        async with self._get_client() as client:
-            try:
-                async with client.stream(
-                    "POST",
-                    f"{self.base_url}/api/chat",
-                    json={
-                        "model": self.model,
-                        "messages": messages,
-                        "stream": True,
-                        "keep_alive": "24h",
-                        "options": {
-                            "num_ctx": 2048,
-                            "temperature": 0.7,
-                        },
+        client = self.client
+        try:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/api/chat",
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "stream": True,
+                    "keep_alive": "24h",
+                    "options": {
+                        "num_ctx": 2048,
+                        "temperature": 0.7,
                     },
-                ) as resp:
-                    if resp.status_code != 200:
-                        body = (await resp.aread())[:500].decode(errors="replace")
-                        raise AIProviderError(f"Ollama error {resp.status_code}: {body}")
+                },
+            ) as resp:
+                if resp.status_code != 200:
+                    body = (await resp.aread())[:500].decode(errors="replace")
+                    raise AIProviderError(f"Ollama error {resp.status_code}: {body}")
 
-                    async for line in resp.aiter_lines():
-                        if not line.strip():
-                            continue
-                        try:
-                            data = json.loads(line)
-                        except (json.JSONDecodeError, ValueError):
-                            logger.debug("Skipping malformed Ollama line: %r", line[:200])
-                            continue
-                        if not isinstance(data, dict):
-                            logger.debug("Skipping non-object Ollama line: %r", line[:200])
-                            continue
-                        chunk = (data.get("message") or {}).get("content", "") or ""
-                        if chunk:
-                            yield ProviderChunk(text=chunk, done=bool(data.get("done")))
-            except httpx.RequestError as exc:
-                raise AIProviderError(f"Ollama connection failed: {exc}") from exc
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except (json.JSONDecodeError, ValueError):
+                        logger.debug("Skipping malformed Ollama line: %r", line[:200])
+                        continue
+                    if not isinstance(data, dict):
+                        logger.debug("Skipping non-object Ollama line: %r", line[:200])
+                        continue
+                    chunk = (data.get("message") or {}).get("content", "") or ""
+                    if chunk:
+                        yield ProviderChunk(text=chunk, done=bool(data.get("done")))
+        except httpx.RequestError as exc:
+            raise AIProviderError(f"Ollama connection failed: {exc}") from exc
+
+    async def warm(self) -> bool:
+        """Cheap keep-alive ping: loads/pins the model without generating."""
+        try:
+            async with self.client.stream(
+                "POST",
+                f"{self.base_url}/api/generate",
+                json={"model": self.model, "prompt": "", "keep_alive": "24h"},
+            ) as resp:
+                if resp.status_code != 200:
+                    return False
+                async for _line in resp.aiter_lines():
+                    pass
+                return True
+        except httpx.RequestError as exc:
+            logger.debug("Ollama warmup failed: %s", exc)
+            return False
