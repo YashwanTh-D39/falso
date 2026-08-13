@@ -46,7 +46,10 @@ async def get_vad_diagnostics():
 
 @router.post("/tts")
 async def text_to_speech(request: TTSRequest):
+    logger.info("[TTS] RESPONSE_RECEIVED | text=%r", request.text[:50])
+    logger.info("[TTS] REQUEST_START | text=%r", request.text[:50])
     result = await voice_service.synthesize_speech(request.text)
+    logger.info("[TTS] AUDIO_RECEIVED | bytes=%d | format=%s", len(result.audio_data), result.format)
     media_type = "audio/mpeg" if result.format == "mp3" else "audio/wav"
     provider_name = "ElevenLabs" if result.format == "mp3" else "Local TTS"
     return Response(

@@ -51,7 +51,7 @@ build = {
         base_url=getattr(s, "gemini_base_url", None),
     ),
     "nvidia": lambda s: NVIDIAProvider(
-        model=getattr(s, "nvidia_model", "nvidia/llama-3.1-nemotron-70b-instruct"),
+        model=getattr(s, "nvidia_model", "nvidia/llama-3.3-nemotron-super-49b-v1"),
         api_key=getattr(
             s,
             "effective_nvidia_api_key",

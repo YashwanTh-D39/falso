@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # NVIDIA Nemotron API Configuration
     nvidia_inference_api_key: str = ""
     nvidia_api_key: str = ""
-    nvidia_model: str = "nvidia/llama-3.1-nemotron-70b-instruct"
+    nvidia_model: str = "nvidia/llama-3.3-nemotron-super-49b-v1"
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
 
     @property

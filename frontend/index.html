@@ -206,13 +206,12 @@
       <div class="shimmer"></div>
       <h2>DIAGNOSTICS <span class="tier">TIER · PREMIUM</span></h2>
       <dl>
-        <div class="row"><dt>Provider</dt><dd>Ollama</dd></div>
+        <div class="row"><dt>Provider</dt><dd id="providerName">NVIDIA Nemotron</dd></div>
         <div class="row"><dt>Model</dt><dd>
           <select class="model-select" id="modelSelect">
+            <option selected>nvidia/llama-3.3-nemotron-super-49b-v1</option>
             <option>gemma3:4b</option>
             <option>llama3.1:8b</option>
-            <option>mistral:7b</option>
-            <option>qwen2.5:7b</option>
           </select>
         </dd></div>
         <div class="row"><dt>FPS</dt><dd id="fpsVal">60 / 60</dd></div>
@@ -230,7 +229,7 @@
       <div class="shimmer"></div>
       <div class="chat-head"><span>CONVERSATION LOG</span><span id="msgCount">0 MSGS</span></div>
       <div class="chatlog" id="chatlog">
-        <div class="msg ai">Welcome back. Core initialized on gemma3:4b via Ollama, ready when you are.<span class="meta">FALSO · System Ready</span></div>
+        <div class="msg ai">Welcome back. Core initialized on NVIDIA Nemotron, ready when you are.<span class="meta">FALSO · System Ready</span></div>
       </div>
       <div id="chat-area" style="display:none;"></div>
     </section>
@@ -396,7 +395,7 @@
 
   if (btnTranscript) btnTranscript.addEventListener('click', function(){ showToast('◈ Transcript exported'); });
   if (btnArchive) btnArchive.addEventListener('click', function(){ showToast('◈ Archive opened'); });
-  if (btnSettings) btnSettings.addEventListener('click', function(){ showToast('◈ Settings — active model: Ollama'); });
+  if (btnSettings) btnSettings.addEventListener('click', function(){ showToast('◈ Settings — active model: NVIDIA Nemotron'); });
   if (btnReset) btnReset.addEventListener('click', function(){
     if (window.rendererManager && window.rendererManager.controls) {
       window.rendererManager.controls.reset();

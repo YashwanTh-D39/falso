@@ -9,8 +9,8 @@ export class DiagnosticsManager {
     this.lastFpsCalcTime = performance.now();
     this.lastWsUpdateTime = Date.now();
     this.renderedEntitiesCount = 0;
-    this.activeProvider = "Ollama";
-    this.activeModel = "gemma3:4b";
+    this.activeProvider = "NVIDIA";
+    this.activeModel = "nvidia/llama-3.3-nemotron-super-49b-v1";
 
     this.stages = {
       threeImport: 'PENDING',

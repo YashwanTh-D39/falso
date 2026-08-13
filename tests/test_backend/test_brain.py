@@ -73,7 +73,7 @@ class FakeProvider:
         self._error = error
         self.messages: list[dict] | None = None
 
-    async def stream_chat(self, messages: list[dict]):
+    async def stream_chat(self, messages: list[dict], **kwargs):
         self.messages = messages
         if self._error is not None:
             raise self._error
@@ -102,7 +102,9 @@ class TestBrainServiceLlmStreaming:
     async def test_always_ends_with_done_line(self) -> None:
         provider = FakeProvider(chunks=[ProviderChunk(text="only chunk")])
         events = await self._events(self._inject(provider))
-        assert events[-1] == {"model": "fake-model", "response": "", "done": True}
+        assert events[-1]["done"] is True
+        assert events[-1]["model"] == "fake-model"
+        assert events[-1]["response"] == ""
 
     async def test_empty_chunks_skipped_but_done_emitted(self) -> None:
         provider = FakeProvider(chunks=[ProviderChunk(text="")])

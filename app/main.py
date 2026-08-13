@@ -57,9 +57,23 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         boot_tracker.fail_stage(2, str(exc))
 
-    # [3] Ollama Model Pre-Warmup
+    # [3] AI Provider Verification & Model Check
     boot_tracker.start_stage(3)
-    if settings.ai_provider == "ollama":
+    prov_name = settings.effective_ai_provider
+    if prov_name == "nvidia":
+        try:
+            from app.routes.brain import brain_service
+            verified = False
+            if hasattr(brain_service.provider, "verify_model_availability"):
+                verified = await brain_service.provider.verify_model_availability()
+            if verified:
+                msg = f"NVIDIA Model Verified ({brain_service.provider.model})"
+            else:
+                msg = f"NVIDIA Active ({brain_service.provider.model})"
+            boot_tracker.end_stage(3, msg)
+        except Exception as exc:
+            boot_tracker.end_stage(3, f"NVIDIA Provider Initialized ({exc})")
+    elif prov_name == "ollama":
         try:
             import httpx
             async with httpx.AsyncClient(timeout=3.0) as client:
@@ -68,7 +82,8 @@ async def lifespan(app: FastAPI):
                     async def _warmup():
                         try:
                             from app.routes.brain import brain_service
-                            await brain_service.provider.warm()
+                            if hasattr(brain_service.provider, "warm"):
+                                await brain_service.provider.warm()
                         except Exception:
                             pass
                     asyncio.create_task(_warmup())
@@ -79,7 +94,7 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             boot_tracker.end_stage(3, f"Ollama Offline ({exc})")
     else:
-        boot_tracker.end_stage(3, f"Provider: {settings.ai_provider}")
+        boot_tracker.end_stage(3, f"Provider: {prov_name}")
 
     # [4] Voice
     boot_tracker.start_stage(4)

@@ -22,6 +22,14 @@ export class VoiceManager {
     this.currentAudioSource = null;
     this.activeTTSFetchController = null;
     this.sysState = 'booting';
+    this.activeRequestId = null;
+  }
+
+  setActiveRequestId(requestId) {
+    this.activeRequestId = requestId;
+    this.sentenceBuffer = "";
+    this.clearAudioStreamingQueue();
+    this.stopActiveAudioPlayback();
   }
 
   changeState(newState) {
@@ -39,14 +47,22 @@ export class VoiceManager {
         statusPill.innerHTML = '<span class="pulse-dot">🧠</span> THINKING...';
         statusPill.style.borderColor = '#7DF9FF';
         statusPill.style.color = '#7DF9FF';
+      } else if (newState === 'streaming') {
+        statusPill.innerHTML = '<span class="pulse-dot">⚡</span> STREAMING...';
+        statusPill.style.borderColor = '#00FF9D';
+        statusPill.style.color = '#00FF9D';
       } else if (newState === 'speaking') {
         statusPill.innerHTML = '<span class="pulse-dot">🗣️</span> SPEAKING...';
         statusPill.style.borderColor = '#4DA6FF';
         statusPill.style.color = '#4DA6FF';
       } else if (newState === 'searching') {
-        statusPill.innerHTML = '<span class="pulse-dot">🌐</span> SEARCHING WEB...';
+        statusPill.innerHTML = '<span class="pulse-dot">&#127760;</span> SEARCHING WEB...';
         statusPill.style.borderColor = '#7DF9FF';
         statusPill.style.color = '#7DF9FF';
+      } else if (newState === 'warming') {
+        statusPill.innerHTML = '<span class="pulse-dot">&#9889;</span> NVIDIA WARMING...';
+        statusPill.style.borderColor = '#FFA726';
+        statusPill.style.color = '#FFA726';
       } else if (newState === 'interrupted') {
         statusPill.innerHTML = '<span>⚡</span> INTERRUPTED!';
         statusPill.style.borderColor = '#7DF9FF';
@@ -168,18 +184,16 @@ export class VoiceManager {
     }
   }
 
-  triggerVoiceInterruption() {
+  triggerVoiceInterruption(requestId) {
     if (this.sysState === 'speaking' || this.isSpeakingSpeech || this.audioSentenceQueue.length > 0) {
-      console.log('[TTS] Interrupted by user');
+      console.log(`[TTS][${requestId || this.activeRequestId || 'GLOBAL'}] INTERRUPTED`);
       this.stopActiveAudioPlayback();
       this.clearAudioStreamingQueue();
       this.isSpeakingSpeech = false;
       this.isProcessingAudioQueue = false;
-      console.log('[TTS] Stopped');
       this.changeState('interrupted');
       setTimeout(() => {
         this.changeState('listening');
-        console.log('[STT] Listening');
         this.ensureSpeechRecognitionActive();
       }, 50);
     }
@@ -212,27 +226,39 @@ export class VoiceManager {
     this.isProcessingAudioQueue = false;
   }
 
-  processIncomingTokenStream(tokenText) {
+  processIncomingTokenStream(tokenText, requestId) {
+    if (requestId && this.activeRequestId && requestId !== this.activeRequestId) {
+      return;
+    }
     this.sentenceBuffer += tokenText;
     const match = this.sentenceBuffer.match(/([^.!?\n]+[.!?\n]+)/);
     if (match) {
       const completeSentence = match[0];
       this.sentenceBuffer = this.sentenceBuffer.substring(completeSentence.length);
-      this.enqueueSentenceForTTS(completeSentence);
+      this.enqueueSentenceForTTS(completeSentence, requestId);
     }
   }
 
-  finalizeIncomingTokenStream() {
+  finalizeIncomingTokenStream(requestId) {
+    if (requestId && this.activeRequestId && requestId !== this.activeRequestId) {
+      return;
+    }
     if (this.sentenceBuffer.trim().length > 0) {
-      this.enqueueSentenceForTTS(this.sentenceBuffer);
+      this.enqueueSentenceForTTS(this.sentenceBuffer, requestId);
       this.sentenceBuffer = "";
     }
   }
 
-  enqueueSentenceForTTS(sentenceText) {
+  enqueueSentenceForTTS(sentenceText, requestId) {
     const clean = this.cleanTextForSpeech(sentenceText);
     if (!clean || clean.trim().length === 0) return;
-    this.audioSentenceQueue.push(clean);
+    const reqId = requestId || this.activeRequestId;
+    // Sentence deduplication check against tail of queue
+    if (this.audioSentenceQueue.length > 0) {
+      const lastItem = this.audioSentenceQueue[this.audioSentenceQueue.length - 1];
+      if (lastItem.text === clean && lastItem.requestId === reqId) return;
+    }
+    this.audioSentenceQueue.push({ text: clean, requestId: reqId });
     if (!this.isProcessingAudioQueue) {
       this.playNextSentenceInQueue();
     }
@@ -241,7 +267,7 @@ export class VoiceManager {
   async playNextSentenceInQueue() {
     if (this.audioSentenceQueue.length === 0) {
       this.isProcessingAudioQueue = false;
-      if (this.sysState === 'speaking') {
+      if (this.sysState === 'speaking' || this.sysState === 'streaming') {
         setTimeout(() => {
           if (!this.isProcessingAudioQueue && this.audioSentenceQueue.length === 0) {
             this.changeState('listening');
@@ -252,16 +278,22 @@ export class VoiceManager {
       return;
     }
 
+    const nextItem = this.audioSentenceQueue.shift();
+    if (!nextItem || (nextItem.requestId && this.activeRequestId && nextItem.requestId !== this.activeRequestId)) {
+      this.playNextSentenceInQueue();
+      return;
+    }
+
     this.isProcessingAudioQueue = true;
     this.changeState('speaking');
-    const nextSentence = this.audioSentenceQueue.shift();
-    const played = await this.playServerTTS(nextSentence);
+    const played = await this.playServerTTS(nextItem.text, nextItem.requestId);
     if (!played) {
       this.playNextSentenceInQueue();
     }
   }
 
-  async playServerTTS(text) {
+  async playServerTTS(text, requestId) {
+    const reqId = requestId || this.activeRequestId || 'GLOBAL';
     if (this.activeTTSFetchController) {
       try { this.activeTTSFetchController.abort(); } catch(e) {}
     }
@@ -270,23 +302,25 @@ export class VoiceManager {
 
     const ttsText = text.length > 2000 ? text.substring(0, 2000) + '...' : text;
     this.isSpeakingSpeech = true;
-    console.log("[TTS Stream Sentence] Started:", ttsText);
+    console.log(`[TTS][${reqId}] RESPONSE_RECEIVED`, ttsText);
+    console.log(`[TTS][${reqId}] REQUEST_START`, ttsText);
     try {
       const res = await fetch(API_BASE + '/voice/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: ttsText }),
+        body: JSON.stringify({ text: ttsText, request_id: reqId }),
         signal: signal
       });
 
-      if (signal.aborted) {
-        console.log("[TTS Stream Sentence] Aborted in-flight TTS request.");
+      if (signal.aborted || (this.activeRequestId && reqId !== this.activeRequestId)) {
+        console.log(`[TTS][${reqId}] ABORTED_IN_FLIGHT`);
         return false;
       }
 
       if (res.ok) {
         const audioBlob = await res.blob();
-        if (signal.aborted || audioBlob.size < 100) {
+        console.log(`[TTS][${reqId}] AUDIO_RECEIVED`, audioBlob.size, "bytes");
+        if (signal.aborted || audioBlob.size < 100 || (this.activeRequestId && reqId !== this.activeRequestId)) {
           this.isSpeakingSpeech = false;
           return false;
         }
@@ -295,25 +329,29 @@ export class VoiceManager {
         this.currentAudioSource = audio;
         this.changeState('speaking');
         audio.onended = () => {
+          console.log(`[TTS][${reqId}] PLAYBACK_END`);
           URL.revokeObjectURL(audioUrl);
           this.currentAudioSource = null;
           this.isSpeakingSpeech = false;
           this.lastSpeechTime = Date.now();
           this.playNextSentenceInQueue();
         };
-        audio.onerror = () => {
+        audio.onerror = (err) => {
+          console.warn(`[TTS][${reqId}] PLAYBACK_ERROR`, err);
           URL.revokeObjectURL(audioUrl);
           this.currentAudioSource = null;
           this.isSpeakingSpeech = false;
           this.playNextSentenceInQueue();
         };
         try {
-          if (!signal.aborted) {
+          if (!signal.aborted && (!this.activeRequestId || reqId === this.activeRequestId)) {
+            console.log(`[TTS][${reqId}] PLAYBACK_START`);
             await audio.play();
+            console.log(`[TTS][${reqId}] PLAYBACK_STARTED_SUCCESSFULLY`);
             return true;
           }
         } catch (playErr) {
-          console.warn('[TTS] Audio play warning:', playErr.message);
+          console.warn(`[TTS][${reqId}] PLAYBACK_ERROR`, playErr);
           this.currentAudioSource = null;
           this.isSpeakingSpeech = false;
           return false;
@@ -321,7 +359,7 @@ export class VoiceManager {
       }
     } catch(e) {
       if (e.name === 'AbortError') {
-        console.log("[TTS Stream Sentence] Successfully aborted TTS fetch.");
+        console.log(`[TTS][${reqId}] ABORTED`);
         return false;
       }
     }

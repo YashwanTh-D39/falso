@@ -50,11 +50,11 @@ class FakeClient:
 class TestNVIDIAProvider:
     def test_provider_initialization(self):
         provider = NVIDIAProvider(
-            model="nvidia/llama-3.1-nemotron-70b-instruct",
+            model="nvidia/llama-3.3-nemotron-super-49b-v1",
             api_key="test-key",
         )
         assert provider.name == "nvidia"
-        assert provider.model == "nvidia/llama-3.1-nemotron-70b-instruct"
+        assert provider.model == "nvidia/llama-3.3-nemotron-super-49b-v1"
         assert provider.api_key == "test-key"
 
     @pytest.mark.asyncio
@@ -66,7 +66,7 @@ class TestNVIDIAProvider:
     @pytest.mark.asyncio
     async def test_successful_streaming(self, monkeypatch):
         provider = NVIDIAProvider(
-            model="nvidia/llama-3.1-nemotron-70b-instruct",
+            model="nvidia/llama-3.3-nemotron-super-49b-v1",
             api_key="valid-key",
         )
 
@@ -81,7 +81,7 @@ class TestNVIDIAProvider:
         chunks = [c.text async for c in provider.stream_chat([{"role": "user", "content": "hi"}])]
         assert chunks == ["Hello", " world!"]
         assert fake_client.last_request["headers"]["Authorization"] == "Bearer valid-key"
-        assert fake_client.last_request["json"]["model"] == "nvidia/llama-3.1-nemotron-70b-instruct"
+        assert fake_client.last_request["json"]["model"] == "nvidia/llama-3.3-nemotron-super-49b-v1"
 
     @pytest.mark.asyncio
     async def test_401_error_handling(self, monkeypatch):
@@ -97,11 +97,11 @@ class TestNVIDIAProvider:
         s = Settings(
             llm_provider="nvidia",
             nvidia_inference_api_key="test-key",
-            nvidia_model="nvidia/llama-3.1-nemotron-70b-instruct",
+            nvidia_model="nvidia/llama-3.3-nemotron-super-49b-v1",
         )
         provider = build_provider(s)
         assert isinstance(provider, NVIDIAProvider)
-        assert provider.model == "nvidia/llama-3.1-nemotron-70b-instruct"
+        assert provider.model == "nvidia/llama-3.3-nemotron-super-49b-v1"
 
 
 class TestFallbackMechanism:

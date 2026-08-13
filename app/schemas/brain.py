@@ -14,6 +14,7 @@ from typing import Optional
 class ChatRequest(BaseModel):
     prompt: Optional[str] = Field(default=None, min_length=1, max_length=50_000)
     message: Optional[str] = Field(default=None, min_length=1, max_length=50_000)
+    request_id: Optional[str] = Field(default=None)
     history: list[ChatMessage] = Field(default_factory=list)
 
     def get_prompt(self) -> str:
