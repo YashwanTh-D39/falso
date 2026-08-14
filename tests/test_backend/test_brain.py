@@ -157,10 +157,8 @@ class TestBrainServicePersonalityInjection:
         assert events[-1]["done"] is True
 
         messages = self.service.provider.messages
-        assert messages[0] == {
-            "role": "system",
-            "content": "STUB-PROMPT",
-        }
+        assert messages[0]["role"] == "system"
+        assert messages[0]["content"].startswith("STUB-PROMPT")
         assert messages[1] == {
             "role": "user",
             "content": "hello, no tool words here",

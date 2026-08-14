@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
     from app.tools.base import Tool
@@ -31,12 +31,15 @@ class ToolRegistry:
         return cls._tools.get(name)
 
     @classmethod
-    def list(cls) -> list[dict[str, str]]:
+    def list(cls) -> list[dict[str, Any]]:
         return [
             {
                 "name": t.name,
                 "description": t.description,
                 "parameters": t.parameters,
+                "output_schema": getattr(t, "output_schema", {}),
+                "permission_level": getattr(t, "permission_level", "read_only"),
+                "timeout": getattr(t, "timeout", 5.0),
             }
             for t in cls._tools.values()
         ]

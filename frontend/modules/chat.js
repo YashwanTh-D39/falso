@@ -11,6 +11,7 @@ export class ChatManager {
     this.msgCount = 1;
     this.activeRequestId = null;
     this.activeAbortController = null;
+    this.sessionId = 'FALSO-SESSION-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
   }
 
   appendMessage(role, text) {
@@ -70,7 +71,12 @@ export class ChatManager {
     }
 
     this.appendMessage('user', text);
-    this.voiceManager.changeState('thinking');
+    const isAutomation = /^(open|launch|focus|run|organize|close)\s+/i.test(lowerText);
+    if (isAutomation) {
+      this.voiceManager.changeState('executing');
+    } else {
+      this.voiceManager.changeState('thinking');
+    }
 
     const t0 = performance.now();
     console.log(`[CHAT][${requestId}] REQUEST_START`);
@@ -89,7 +95,7 @@ export class ChatManager {
       const res = await fetch(API_BASE + '/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, message: text, request_id: requestId }),
+        body: JSON.stringify({ prompt: text, message: text, request_id: requestId, session_id: this.sessionId }),
         signal: signal
       });
 
@@ -136,12 +142,11 @@ export class ChatManager {
           if (parsedEvent && parsedEvent.type === 'status' && parsedEvent.status === 'warming') {
             const warmMs = Math.round(performance.now() - t0);
             console.log(`[CHAT][${requestId}] NVIDIA_WARMING +${warmMs}ms`);
-            this.voiceManager.changeState('warming');
             // Update diagnostics state pill
             const stateVal = document.getElementById('stateVal');
             if (stateVal) {
-              stateVal.className = 'state-pill state-thinking';
-              stateVal.textContent = 'WARMING';
+              stateVal.className = `state-pill state-${this.voiceManager.sysState}`;
+              stateVal.textContent = this.voiceManager.sysState.toUpperCase();
             }
             msgDiv.innerHTML = '<span class="meta">NVIDIA warming...</span>';
             if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -153,7 +158,9 @@ export class ChatManager {
             console.log(`[STREAM][${requestId}] CHUNK_RECEIVED +${chunkMs}ms`);
             if (!firstTokenRendered) {
               firstTokenRendered = true;
-              this.voiceManager.changeState('streaming');
+              if (!isAutomation) {
+                this.voiceManager.changeState('streaming');
+              }
               console.log(`[CHAT][${requestId}] FRONTEND_FIRST_TOKEN +${chunkMs}ms`);
             }
             fullResponse += textSnippet;

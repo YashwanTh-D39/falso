@@ -81,14 +81,14 @@ class PersonalityEngine:
             from app.services.task_manager import task_manager_service
 
             companion_context_block = (
-                "\n\n=== PERSONAL AI COMPANION ACTIVE CONTEXT ===\n"
-                f"[USER PROFILE]\n{user_profile_service.format_summary_for_prompt()}\n\n"
-                f"[DESKTOP CONTEXT]\n{context_detector.format_summary_for_prompt()}\n\n"
-                f"[TASKS & GOALS]\n{task_manager_service.format_summary_for_prompt()}\n"
-                "============================================"
+                "\n\n[INTERNAL CONTEXT — DO NOT REPRODUCE ANY OF THESE HEADERS OR LABELS IN YOUR RESPONSE]\n"
+                f"{user_profile_service.format_summary_for_prompt()}\n"
+                f"{context_detector.format_summary_for_prompt()}\n"
+                f"{task_manager_service.format_summary_for_prompt()}\n"
+                "[END INTERNAL CONTEXT]\n"
             )
             prompt += companion_context_block
-        except Exception as exc:
+        except Exception:
             pass
 
         return prompt

@@ -44,6 +44,27 @@ class CloudMemoryStore(BaseMemoryStore):
             return True
         return False
 
+    def update(
+        self,
+        memory_id: str,
+        content: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        importance: int | None = None,
+        category: str | None = None,
+    ) -> MemoryEntry | None:
+        entry = self._local_cache.get(memory_id)
+        if entry is None:
+            return None
+        if content is not None:
+            entry.content = content.strip()
+        if category is not None:
+            entry.category = category
+        if importance is not None:
+            entry.importance = importance
+        if metadata is not None:
+            entry.metadata.update(metadata)
+        return entry
+
     def list_all(self, limit: int = 100) -> list[MemoryEntry]:
         return list(self._local_cache.values())[:limit]
 

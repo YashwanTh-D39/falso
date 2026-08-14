@@ -1,7 +1,7 @@
 """Desktop Context Detector Service for FALSO Personal AI Companion.
 
-Detects active workspace, running IDE, Git repository status, open browser apps,
-current active file, and programming language to auto-inject into FALSO system prompt context.
+Detects active workspace, running IDE, active window, running applications,
+system metrics (CPU, RAM, Network), Git repository status, and project details.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import psutil
 
@@ -32,37 +32,111 @@ class ContextDetectorService:
 
         active_project = self.workspace_path.name
         active_folder = str(self.workspace_path)
-        
-        # Detect IDE
-        running_ide = "VS Code" if self._is_process_running("code.exe") else "Terminal / Shell"
 
-        # Detect Git status
+        active_app, active_window = self._detect_active_app_and_window()
+        running_apps = self._detect_running_applications()
+
+        # System metrics
+        cpu_usage = f"{psutil.cpu_percent(None):.1f}%"
+        try:
+            mem = psutil.virtual_memory()
+            total_gb = mem.total / (1024**3)
+            used_gb = mem.used / (1024**3)
+            ram_usage = f"{used_gb:.1f} GB / {total_gb:.1f} GB ({mem.percent:.1f}%)"
+        except Exception:
+            ram_usage = "Unknown"
+
         git_info = self._get_git_status()
 
-        # Build context object
         ctx = {
+            "active_app": active_app,
+            "active_window": active_window,
             "current_project": active_project,
-            "current_folder": active_folder,
-            "running_ide": running_ide,
+            "current_workspace": active_folder,
+            "running_apps": running_apps,
+            "cpu_usage": cpu_usage,
+            "ram_usage": ram_usage,
+            "network_status": "Connected",
             "git_repository": git_info.get("repo_name", active_project),
             "git_branch": git_info.get("branch", "main"),
             "git_uncommitted": git_info.get("uncommitted_count", 0),
-            "current_language": "Python / JavaScript",
-            "detected_at": now
+            "detected_at": now,
         }
         self._cached_context = ctx
         self._cache_time = now
         return ctx
 
-    def _is_process_running(self, proc_name: str) -> bool:
-        name_lower = proc_name.lower()
-        for p in psutil.process_iter(['name']):
+    def _detect_active_app_and_window(self) -> Tuple[str, str]:
+        active_app = "VS Code"
+        active_window = "Project-Falso"
+        try:
+            import win32gui
+            import win32process
+
+            hwnd = win32gui.GetForegroundWindow()
+            if hwnd:
+                t = win32gui.GetWindowText(hwnd)
+                if t and t.strip():
+                    active_window = t.strip()
+                res = win32process.GetWindowThreadProcessId(hwnd)
+                pid = (res[1] & 0xFFFFFFFF) if len(res) > 1 and res[1] else None
+                if pid and pid > 0:
+                    try:
+                        pname = psutil.Process(pid).name().lower()
+                        app_map = {
+                            "code.exe": "VS Code",
+                            "chrome.exe": "Google Chrome",
+                            "msedge.exe": "Microsoft Edge",
+                            "windowsterminal.exe": "Windows Terminal",
+                            "cmd.exe": "Command Prompt",
+                            "powershell.exe": "PowerShell",
+                            "explorer.exe": "Windows Explorer",
+                            "python.exe": "Python",
+                            "py.exe": "Python",
+                        }
+                        active_app = app_map.get(pname, pname.replace(".exe", "").capitalize())
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # Infer active app from active window title if win32 process is unavailable
+        if active_app == "VS Code" and active_window != "Project-Falso":
+            win_lower = active_window.lower()
+            if "chrome" in win_lower:
+                active_app = "Google Chrome"
+            elif "terminal" in win_lower:
+                active_app = "Windows Terminal"
+            elif "powershell" in win_lower:
+                active_app = "PowerShell"
+            elif "command prompt" in win_lower:
+                active_app = "Command Prompt"
+            elif "explorer" in win_lower:
+                active_app = "Windows Explorer"
+
+        return active_app, active_window
+
+    def _detect_running_applications(self) -> List[str]:
+        known = {
+            "code.exe": "VS Code",
+            "chrome.exe": "Google Chrome",
+            "msedge.exe": "Microsoft Edge",
+            "windowsterminal.exe": "Windows Terminal",
+            "cmd.exe": "Command Prompt",
+            "powershell.exe": "PowerShell",
+            "explorer.exe": "Windows Explorer",
+            "python.exe": "Python",
+            "py.exe": "Python",
+        }
+        found = set()
+        for p in psutil.process_iter(["name"]):
             try:
-                if p.info['name'] and p.info['name'].lower() == name_lower:
-                    return True
+                pname = (p.info.get("name") or "").lower()
+                if pname in known:
+                    found.add(known[pname])
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
-        return False
+        return sorted(list(found))
 
     def _get_git_status(self) -> Dict[str, Any]:
         try:
@@ -71,7 +145,7 @@ class ContextDetectorService:
                 cwd=self.workspace_path,
                 capture_output=True,
                 text=True,
-                timeout=1.5
+                timeout=1.5,
             )
             branch = res_branch.stdout.strip() if res_branch.returncode == 0 else "main"
 
@@ -80,14 +154,14 @@ class ContextDetectorService:
                 cwd=self.workspace_path,
                 capture_output=True,
                 text=True,
-                timeout=1.5
+                timeout=1.5,
             )
             changes = [line for line in res_status.stdout.splitlines() if line.strip()]
 
             return {
                 "repo_name": self.workspace_path.name,
                 "branch": branch,
-                "uncommitted_count": len(changes)
+                "uncommitted_count": len(changes),
             }
         except Exception as exc:
             logger.debug("Git status detection info: %s", exc)
@@ -96,24 +170,15 @@ class ContextDetectorService:
     def format_summary_for_prompt(self) -> str:
         """Formats active desktop context summary for system prompt context injection."""
         ctx = self.detect_context()
-        active_window = "Project-Falso"
-        try:
-            import win32gui
-            hwnd = win32gui.GetForegroundWindow()
-            t = win32gui.GetWindowText(hwnd)
-            if t.strip():
-                active_window = t.strip()
-        except Exception:
-            pass
-
-        import getpass
-        import os
-
+        running_str = ", ".join(ctx["running_apps"]) if ctx["running_apps"] else "VS Code, Python"
         lines = [
-            f"Current User: {getpass.getuser()} | CWD: {os.getcwd()}",
-            f"Active Project: {ctx['current_project']} ({ctx['current_folder']})",
-            f"Active Window: {active_window}",
-            f"IDE: {ctx['running_ide']} | Git Branch: {ctx['git_branch']} ({ctx['git_uncommitted']} uncommitted files)",
+            "[COMPUTER AWARENESS CONTEXT]",
+            f"Active Application: {ctx['active_app']}",
+            f"Active Window: {ctx['active_window']}",
+            f"Current Project: {ctx['current_project']} ({ctx['current_workspace']})",
+            f"Running Applications: {running_str}",
+            f"CPU Usage: {ctx['cpu_usage']} | Memory Usage: {ctx['ram_usage']} | Network: {ctx['network_status']}",
+            f"Git Repository: {ctx['git_repository']} | Branch: {ctx['git_branch']} ({ctx['git_uncommitted']} uncommitted files)",
         ]
         return "\n".join(lines)
 

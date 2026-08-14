@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 import logging
 import re
 from abc import ABC, abstractmethod
@@ -10,6 +11,12 @@ if TYPE_CHECKING:
     from app.services.context import ConversationContext
 
 logger = logging.getLogger(__name__)
+
+
+class PermissionLevel(str, Enum):
+    READ_ONLY = "read_only"
+    LOW_RISK = "low_risk"
+    DESTRUCTIVE = "destructive"
 
 
 @dataclass
@@ -24,6 +31,9 @@ class Tool(ABC):
     name: str = ""
     description: str = ""
     parameters: ClassVar[dict] = {}
+    output_schema: ClassVar[dict] = {}
+    permission_level: ClassVar[PermissionLevel] = PermissionLevel.READ_ONLY
+    timeout: float = 5.0
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)

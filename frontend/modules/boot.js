@@ -126,7 +126,7 @@ class BootManager {
       window.chatManager = this.chatManager;
       window.settingsManager = settingsManager;
 
-      // 8. UI Listeners & Non-blocking Mic Request
+      // 8. UI Listeners & Voice-First Hands-Free Startup
       this.setupEventListeners();
       try {
         this.voiceManager.initSpeechRecognition((cleanText) => {
@@ -136,11 +136,11 @@ class BootManager {
         console.warn('[BOOT] Speech recognition initialization warning:', sttErr);
       }
 
-      this.voiceManager.requestMicPermission().catch((micErr) => {
-        console.warn('[BOOT] Microphone permission request warning:', micErr);
+      // Voice-First Default Mode Startup: Request mic permission, verify STT, speak "Yes, Boss.", and enter LISTENING
+      this.voiceManager.startVoiceFirstMode().catch((voiceErr) => {
+        console.warn('[BOOT] Voice-first mode startup warning:', voiceErr);
       });
 
-      this.voiceManager.changeState('idle');
       console.log('[BOOT] ✓ All startup steps complete -> Living Orb rendering!');
 
       // Non-blocking warm: pins the local LLM so the first chat streams
@@ -156,8 +156,9 @@ class BootManager {
   }
 
   setupEventListeners() {
-    const sendBtn = document.getElementById('btn-send');
-    const cmdInput = document.getElementById('cmd-input');
+    const sendBtn = document.getElementById('sendBtn') || document.getElementById('btn-send');
+    const cmdInput = document.getElementById('cmdInput') || document.getElementById('cmd-input');
+    const modeToggle = document.getElementById('modeToggle');
 
     const handleSend = () => {
       const val = cmdInput.value.trim();
@@ -171,6 +172,16 @@ class BootManager {
     if (cmdInput) {
       cmdInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleSend();
+      });
+    }
+
+    if (modeToggle) {
+      modeToggle.addEventListener('click', () => {
+        if (this.voiceManager.sysState === 'sleeping' || !this.voiceManager.isHandsFreeEnabled) {
+          this.voiceManager.enableHandsFreeMode();
+        } else {
+          this.voiceManager.disableHandsFreeMode();
+        }
       });
     }
 

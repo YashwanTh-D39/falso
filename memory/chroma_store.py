@@ -63,6 +63,34 @@ class ChromaMemoryStore(BaseMemoryStore):
         except Exception:  # noqa: BLE001
             return False
 
+    def update(
+        self,
+        memory_id: str,
+        content: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        importance: int | None = None,
+        category: str | None = None,
+    ) -> MemoryEntry | None:
+        try:
+            res = self.collection.get(ids=[memory_id])
+            if not res or not res.get("documents"):
+                return None
+            old_doc = res["documents"][0]
+            old_meta = (res.get("metadatas") or [{}])[0] or {}
+
+            new_doc = content.strip() if content is not None else old_doc
+            if metadata is not None:
+                old_meta.update(metadata)
+            if category is not None:
+                old_meta["category"] = category
+            if importance is not None:
+                old_meta["importance"] = importance
+
+            self.collection.update(ids=[memory_id], documents=[new_doc], metadatas=[old_meta])
+            return MemoryEntry(id=memory_id, content=new_doc, metadata=old_meta)
+        except Exception:  # noqa: BLE001
+            return None
+
     def list_all(self, limit: int = 100) -> list[MemoryEntry]:
         get_res = self.collection.get(limit=limit)
         entries: list[MemoryEntry] = []

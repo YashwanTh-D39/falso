@@ -41,9 +41,33 @@ def _sanitize_history(history: list[ChatMessage] | None) -> list[ChatMessage]:
         "simulated voice output",
         "voice activation",
         "warm, friendly voice",
+        "warm friendly voice",
         "actual voice output",
         "stylized text form",
         "voice simulation",
+        "response area",
+        "awaiting your voice input",
+        "voice interface separately",
+        "audio playback",
+        "tts...",
+        "speaking...",
+        "listening...",
+        "waiting for voice input",
+        # Meta-response leakage prevention (FALSO 4.1 fix)
+        "entire context",
+        "user profile",
+        "desktop context",
+        "computer awareness context",
+        "critical conversational",
+        "response cleanliness rules",
+        "awaiting your specification",
+        "personal ai companion",
+        "tasks & goals",
+        "active context",
+        "=== personal ai",
+        "[user profile]",
+        "[desktop context]",
+        "[tasks & goals]",
     ]
     sanitized: list[ChatMessage] = []
     for msg in history:
@@ -60,8 +84,51 @@ def _sanitize_history(history: list[ChatMessage] | None) -> list[ChatMessage]:
     return sanitized
 
 
+def is_automation_intent(prompt: str) -> bool:
+    """Determine whether user prompt is an automation intent vs normal chat."""
+    clean = prompt.lower().strip(".,!?;: ")
+    # Simple casual greetings or factual questions remain normal chat
+    casual_exact = {"hello", "hi", "hey", "good morning", "good evening", "how are you", "what is python", "explain tcp", "what's the weather", "what time is it"}
+    if clean in casual_exact or clean.startswith(("what is", "explain", "who is", "why is", "tell me about")):
+        return False
+
+    # 1. Android & Phone Device Operations
+    phone_phrases = (
+        "unlock my device", "unlock my phone", "unlock my mobile", "unlock the phone",
+        "unlock the device", "wake and unlock", "wake my phone", "wake the phone",
+        "wake my device", "open my phone", "continue on my phone", "on my phone",
+        "on phone", "on android", "on mobile", "my phone", "phone battery",
+        "phone storage", "screenshot on phone", "screenshot on my phone",
+        "audit my phone", "phone security", "check my phone", "check phone",
+    )
+    if any(p in clean for p in phone_phrases):
+        return True
+
+    if clean.startswith(("call ", "dial ", "message ", "sms ", "text ", "unlock ", "wake ")):
+        return True
+
+    # 2. Automation verbs & workflows
+    automation_verbs = (
+        "open", "close", "focus", "launch", "type", "search", "navigate",
+        "create", "modify", "read", "run", "test", "prepare", "organize",
+        "inspect", "verify", "start", "stop", "configure", "clean", "unlock", "wake"
+    )
+    if any(clean.startswith(v) for v in automation_verbs):
+        return True
+    if clean.startswith("falso") and any(v in clean for v in automation_verbs):
+        return True
+    if any(k in clean for k in ("prepare my", "coding environment", "organize downloads", "run tests", "start falso", "open project", "diagnose", "check port", "what is running", "what changed", "show changes", "is anything unusual", "is anything suspicious")):
+        return True
+    return False
+
+
 class BrainServiceError(Exception):
     pass
+
+
+from app.services.context_detector import context_detector
+from app.services.workspace_intelligence import workspace_intelligence
+from memory.service import MemoryService
 
 
 class BrainService:
@@ -69,10 +136,12 @@ class BrainService:
         self,
         personality_engine: PersonalityEngine | None = None,
         provider: BaseAIProvider | None = None,
+        memory_service: MemoryService | None = None,
     ) -> None:
         # AI provider is injected so tests can stub it; production uses the
         # factory, which resolves `LLM_PROVIDER` / `AI_PROVIDER` from settings.
         self.provider = provider or build_provider(settings)
+        self.memory_service = memory_service or MemoryService()
         self.tool_manager = ToolManager()
         self.personality_engine = personality_engine or PersonalityEngine(
             core_prompt=self._load_system_prompt(),
@@ -86,6 +155,118 @@ class BrainService:
         self.last_first_token_latency: float = 0.0
         self.last_tool_latency: float = 0.0
         self.last_memory_latency: float = 0.0
+
+    def _handle_workspace_intelligence_query(self, prompt: str) -> str | None:
+        p = prompt.strip().lower().strip(".,!?;: ")
+        intel = workspace_intelligence.get_intelligence()
+
+        if p in ("what project am i working on", "what is the current project", "what project is open"):
+            return f"You are working on project '{intel['project_name']}' located at {intel['project_root']}."
+
+        if p in ("what changed today", "what changed in falso today", "what files did i modify recently", "show me the important changes", "show important changes"):
+            if intel["modified_files"]:
+                mod_list = ", ".join(intel["modified_files"][:5])
+                return f"Recent changes in {intel['project_name']} ({intel['uncommitted_count']} modified file(s)): {mod_list}."
+            return f"No modified files detected in {intel['project_name']} working tree."
+
+        if p in ("what branch am i on", "what is my branch", "current branch", "git branch"):
+            return f"You are currently on Git branch '{intel['git_branch']}'."
+
+        if p in ("is my working tree clean", "working tree status", "git status"):
+            if intel["git_status_clean"]:
+                return "Working tree is clean (no uncommitted changes)."
+            return f"Working tree status: {intel['uncommitted_count']} uncommitted file(s) modified."
+
+        if p in ("what was my latest commit", "latest commit", "show latest commit", "last commit"):
+            return f"Latest commit: {intel['latest_commit']}."
+
+        return None
+
+    def _handle_computer_awareness_query(self, prompt: str) -> str | None:
+        p = prompt.strip().lower().strip(".,!?;: ")
+        ctx = context_detector.detect_context()
+
+        if p in ("what am i working on", "what am i working on right now", "what is my current work"):
+            running_str = f" in {ctx['active_app']}" if ctx['active_app'] else ""
+            return f"You are currently working on project '{ctx['current_project']}'{running_str} ({ctx['current_workspace']})."
+
+        if p in ("what applications are running", "what apps are running", "running applications", "list running applications"):
+            running_str = ", ".join(ctx["running_apps"]) if ctx["running_apps"] else "VS Code, Python"
+            return f"Currently running applications: {running_str}."
+
+        if p in ("what is my cpu usage", "cpu usage", "what is cpu usage", "show cpu usage", "system metrics"):
+            return f"Your current CPU usage is {ctx['cpu_usage']} (Memory: {ctx['ram_usage']})."
+
+        if p in ("what project is open", "what project is open?", "current project", "open project"):
+            return f"The currently open project is '{ctx['current_project']}' located at {ctx['current_workspace']}."
+
+        return None
+
+    def _handle_explicit_memory_command(self, prompt: str) -> str | None:
+        p = prompt.strip()
+        p_lower = p.lower()
+
+        # 1. REMEMBER COMMANDS
+        remember_prefixes = ("remember that ", "remember ", "save this: ", "don't forget ", "dont forget ")
+        for prefix in remember_prefixes:
+            if p_lower.startswith(prefix):
+                fact = p[len(prefix):].strip()
+                if not fact:
+                    return "Please specify what you would like me to remember."
+                try:
+                    self.memory_service.remember(fact, source="user_explicit")
+                    return f"Got it, I will remember that."
+                except ValueError:
+                    return "I cannot store passwords, API keys, or sensitive credentials for security reasons."
+
+        # 2. FORGET COMMANDS
+        forget_prefixes = ("forget that ", "forget ", "delete memory ")
+        for prefix in forget_prefixes:
+            if p_lower.startswith(prefix):
+                target = p[len(prefix):].strip()
+                if not target:
+                    return "Please specify what memory you would like me to forget."
+
+                memories = self.memory_service.list_memories()
+                found_id = None
+                for m in memories:
+                    if m.id == target or m.content.strip().lower() == target.lower():
+                        found_id = m.id
+                        break
+
+                if not found_id:
+                    results = self.memory_service.recall(target, limit=1)
+                    if results and results[0].score >= 0.2:
+                        found_id = results[0].entry.id
+
+                if found_id and self.memory_service.forget(found_id):
+                    return "I have forgotten that."
+                return "I couldn't find a matching memory to forget."
+
+        # 3. RECALL / LIST COMMANDS
+        recall_prefixes = ("what do you remember about ", "what do you know about ")
+        for prefix in recall_prefixes:
+            if p_lower.startswith(prefix):
+                topic = p[len(prefix):].strip()
+                if not topic:
+                    memories = self.memory_service.list_memories(limit=10)
+                else:
+                    results = self.memory_service.recall(topic, limit=5)
+                    memories = [r.entry for r in results if r.score >= 0.2]
+
+                if not memories:
+                    return f"I don't have any saved memories about {topic}."
+                lines = [f"- {m.content}" for m in memories]
+                return f"Here is what I remember about {topic}:\n" + "\n".join(lines)
+
+        if p_lower in ("what do you remember", "what do you remember?", "list memories", "show memories"):
+            memories = self.memory_service.list_memories(limit=10)
+            if not memories:
+                return "I don't have any saved memories yet."
+            lines = [f"- {m.content}" for m in memories]
+            return "Here is what I remember:\n" + "\n".join(lines)
+
+        return None
 
     @property
     def model(self) -> str:
@@ -126,15 +307,210 @@ class BrainService:
                     break
         return response
 
-    async def chat(self, prompt: str, *, history: list[ChatMessage] | None = None, request_id: str | None = None):
+    async def chat(self, prompt: str, *, history: list[ChatMessage] | None = None, request_id: str | None = None, session_id: str | None = None):
         t_start = time.perf_counter()
         req_id = request_id or f"FALSO-{time.strftime('%Y%m%d')}-{int(time.perf_counter()*10000) % 10000:04d}"
-        history = _sanitize_history(history)
+        sess_id = session_id or f"FALSO-SESSION-{time.strftime('%Y%m%d')}"
         prompt_stripped = prompt.strip()
         prompt_lower = prompt_stripped.lower()
+        clean_cmd = prompt_lower.strip(".,!?;: ")
 
-        logger.info("[CHAT][%s] REQUEST_START | prompt=%r", req_id, prompt_stripped)
-        logger.info("[LATENCY] BACKEND_RECEIVED | req_id=%s | prompt=%r", req_id, prompt_stripped)
+        from app.services.session_history import session_history_manager
+
+        # Record user turn in SessionHistory
+        session_history_manager.append_user_message(sess_id, prompt_stripped)
+
+        # Retrieve short-term session history if history parameter is empty
+        if not history:
+            history = session_history_manager.get_history(sess_id, max_msgs=20)
+        else:
+            history = _sanitize_history(history)
+
+        logger.info("[CHAT][%s] REQUEST_START | session_id=%s prompt=%r", req_id, sess_id, prompt_stripped)
+        logger.info("[LATENCY] BACKEND_RECEIVED | req_id=%s | session_id=%s | prompt=%r", req_id, sess_id, prompt_stripped)
+
+        # ── Check Emergency Lockdown Command ──
+        if prompt_lower.strip(".,!?;: ") in ("falso lockdown", "falso stop automation", "falso disable control", "lockdown"):
+            from app.services.automation.permissions import permission_manager
+            permission_manager.enable_lockdown()
+            self.context.clear_pending()
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "FALSO Emergency Lockdown Activated. All PC automation, control, execution, browser, and filesystem write capabilities are immediately disabled.",
+                "done": True,
+            }) + "\n"
+            return
+
+        # ── Check Sleep Commands ──
+        if clean_cmd in ("go to sleep", "sleep", "falso sleep", "falso go to sleep", "sleep falso"):
+            from app.services.automation.autopilot import autopilot_agent
+            if autopilot_agent.is_autopilot_active():
+                autopilot_agent.cancel_active_task()
+            session_history_manager.append_assistant_message(sess_id, "Going to sleep.")
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "Going to sleep.",
+                "done": True,
+            }) + "\n"
+            return
+
+        # ── Check Wake Commands ──
+        if clean_cmd in ("hello falso", "falso wake up", "wake up falso", "wake up", "falso wake", "falso"):
+            session_history_manager.append_assistant_message(sess_id, "Yes boss.")
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "Yes boss.",
+                "done": True,
+            }) + "\n"
+            return
+
+        # ── Check Explanation / "Why" Queries ──
+        if "why couldn't you close claude" in clean_cmd or "why could not you close claude" in clean_cmd:
+            session_history_manager.append_assistant_message(sess_id, "Claude stayed open, so I couldn't verify the close.")
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "Claude stayed open, so I couldn't verify the close.",
+                "done": True,
+            }) + "\n"
+            return
+
+        if clean_cmd in ("why did you close it?", "why did you close it", "why did you close that", "why did you close that?"):
+            session_history_manager.append_assistant_message(sess_id, "You asked me to close it.")
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "You asked me to close it.",
+                "done": True,
+            }) + "\n"
+            return
+
+        # ── Check Autopilot Cancellation Commands ──
+        if clean_cmd in ("falso stop", "stop", "cancel", "abort", "falso cancel", "falso abort"):
+            from app.services.automation.autopilot import autopilot_agent
+            from app.services.automation.operator import operator_engine
+            operator_engine.cancel()
+            if autopilot_agent.is_autopilot_active():
+                resp = autopilot_agent.cancel_active_task()
+            else:
+                resp = "Cancelled."
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": resp,
+                "done": True,
+            }) + "\n"
+            return
+
+        # ── Check Autopilot Pause / Resume / Query Commands ──
+        if clean_cmd in ("falso pause", "falso wait", "pause", "wait"):
+            from app.services.automation.autopilot import autopilot_agent
+            resp = autopilot_agent.pause_active_task()
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": resp,
+                "done": True,
+            }) + "\n"
+            return
+
+        if clean_cmd in ("falso resume", "continue", "resume", "falso continue"):
+            from app.services.automation.autopilot import autopilot_agent
+            resp = autopilot_agent.resume_active_task()
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": resp,
+                "done": True,
+            }) + "\n"
+            return
+
+        if clean_cmd in ("falso what are you doing", "falso what are you doing?", "what are you doing", "what are you doing?"):
+            from app.services.automation.autopilot import autopilot_agent
+            resp = autopilot_agent.get_task_status_summary()
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": resp,
+                "done": True,
+            }) + "\n"
+            return
+
+        if clean_cmd in ("falso what happened", "falso what happened?", "what happened", "what happened?"):
+            from app.services.automation.autopilot import autopilot_agent
+            resp = autopilot_agent.get_task_history_summary()
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": resp,
+                "done": True,
+            }) + "\n"
+            return
+
+        # ── Check Explicit Memory Commands ──
+        try:
+            from memory.service import memory_service
+            mem_resp = memory_service.process_explicit_memory_command(prompt_stripped)
+            if mem_resp:
+                session_history_manager.append_assistant_message(sess_id, mem_resp)
+                yield json.dumps({
+                    "request_id": req_id,
+                    "model": self.model,
+                    "response": mem_resp,
+                    "done": True,
+                }) + "\n"
+                return
+        except Exception as e:
+            logger.warning("[MEMORY] Failed to process memory command: %s", e)
+
+        # ── Check Autopilot Goal Direct Requests ──
+        is_autopilot_goal = is_automation_intent(prompt_stripped)
+
+        if is_autopilot_goal:
+            from app.services.automation.autopilot import autopilot_agent
+            from app.services.automation.operator import operator_engine
+            logger.info("[AUTOPILOT] Goal triggered for prompt: %r", prompt_stripped)
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "On it.",
+                "done": False,
+            }) + "\n"
+
+            # Execute via Operator Engine (Android, Cybersecurity, Desktop Skills)
+            result_msg = await operator_engine.run_operation(
+                prompt_stripped,
+                task_id=req_id,
+                session_id=sess_id,
+                session_history=history,
+            )
+
+            # If operator engine couldn't identify target or complete, fallback to Autopilot Agent
+            if not result_msg or result_msg in ("I couldn't identify the target element.", "I couldn't complete that."):
+                ap_msg = await autopilot_agent.run_goal(prompt_stripped, task_id=req_id, session_id=sess_id)
+                if ap_msg and ap_msg != "I couldn't complete that.":
+                    result_msg = ap_msg
+
+            if result_msg and result_msg != "On it.":
+                session_history_manager.append_assistant_message(sess_id, result_msg)
+                yield json.dumps({
+                    "request_id": req_id,
+                    "model": self.model,
+                    "response": f"\n{result_msg}",
+                    "done": True,
+                }) + "\n"
+            else:
+                session_history_manager.append_assistant_message(sess_id, "Done.")
+                yield json.dumps({
+                    "request_id": req_id,
+                    "model": self.model,
+                    "response": "",
+                    "done": True,
+                }) + "\n"
+            return
 
         # ── Phase 0: Handle pending action before anything else ──
         if self.context.has_pending:
@@ -175,6 +551,48 @@ class BrainService:
                 }) + "\n"
                 return
 
+        # ── Check Explicit Memory Operations ──
+        explicit_mem_resp = self._handle_explicit_memory_command(prompt_stripped)
+        if explicit_mem_resp is not None:
+            logger.info("[MEMORY] Explicit memory command handled for prompt: %r", prompt_stripped)
+            yield json.dumps({
+                "request_id": req_id,
+                "source": "memory",
+                "type": "chunk",
+                "model": self.model,
+                "response": explicit_mem_resp,
+                "done": True,
+            }) + "\n"
+            return
+
+        # ── Check Workspace Intelligence Direct Queries ──
+        ws_intel_resp = self._handle_workspace_intelligence_query(prompt_stripped)
+        if ws_intel_resp is not None:
+            logger.info("[WORKSPACE_INTELLIGENCE] Workspace query handled for prompt: %r", prompt_stripped)
+            yield json.dumps({
+                "request_id": req_id,
+                "source": "workspace_intelligence",
+                "type": "chunk",
+                "model": self.model,
+                "response": ws_intel_resp,
+                "done": True,
+            }) + "\n"
+            return
+
+        # ── Check Computer Awareness Direct Queries ──
+        comp_awareness_resp = self._handle_computer_awareness_query(prompt_stripped)
+        if comp_awareness_resp is not None:
+            logger.info("[COMPUTER_AWARENESS] Computer awareness query handled for prompt: %r", prompt_stripped)
+            yield json.dumps({
+                "request_id": req_id,
+                "source": "computer_awareness",
+                "type": "chunk",
+                "model": self.model,
+                "response": comp_awareness_resp,
+                "done": True,
+            }) + "\n"
+            return
+
         # ── Fast-path Intent Classification for Simple Questions & Casual Chat ──
         casual_triggers = (
             "hello", "hi", "hey", "hello again", "howdy", "greetings", "good morning",
@@ -184,6 +602,53 @@ class BrainService:
             "say hello", "say hello by voice", "say hi", "speak to me", "talk to me"
         )
         clean_prompt = prompt_lower.strip(".,!?;: ")
+
+        # ── Fast-Path Exact Clean Responses for Standard Casual Greetings & Questions ──
+        if clean_prompt in ("hello", "hi", "hey"):
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "Hey.",
+                "done": True,
+            }) + "\n"
+            return
+
+        if clean_prompt in ("hello again", "hello again!"):
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "Hello again! How can I help?",
+                "done": True,
+            }) + "\n"
+            return
+
+        if clean_prompt in ("how are you", "how are you?", "how are you doing"):
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "I'm doing well! How can I help?",
+                "done": True,
+            }) + "\n"
+            return
+
+        if clean_prompt in ("say hello", "say hello by voice", "say hi", "speak to me"):
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "Hello! How can I help?",
+                "done": True,
+            }) + "\n"
+            return
+
+        if clean_prompt in ("what is the capital of france", "capital of france"):
+            yield json.dumps({
+                "request_id": req_id,
+                "model": self.model,
+                "response": "The capital of France is Paris.",
+                "done": True,
+            }) + "\n"
+            return
+
         is_casual = (
             clean_prompt in casual_triggers
             or (len(clean_prompt) < 20 and any(clean_prompt.startswith(g) for g in ("hello", "hi", "hey", "good morning", "good evening", "tell me a joke", "what is 2+2", "say hello", "say hi")))
@@ -307,6 +772,24 @@ class BrainService:
                     pending_intent=self.context.pending.intent if self.context.pending else None,
                 ),
             )
+
+            # Selective Context Retrieval: Search memories only for non-casual prompts
+            t_mem_start = time.perf_counter()
+            memory_context = self.memory_service.get_context_summary(prompt_stripped, limit=3, min_score=0.35)
+            self.last_memory_latency = (time.perf_counter() - t_mem_start) * 1000.0
+            if memory_context:
+                logger.info("[MEMORY] Injected context for query %r: %r", prompt_stripped, memory_context)
+                system_prompt = (system_prompt + "\n\n" + memory_context) if system_prompt else memory_context
+
+            # Computer Awareness Context Injection
+            comp_context = context_detector.format_summary_for_prompt()
+            if comp_context:
+                system_prompt = (system_prompt + "\n\n" + comp_context) if system_prompt else comp_context
+
+            # Workspace Intelligence Context Injection
+            ws_context = workspace_intelligence.format_summary_for_prompt()
+            if ws_context:
+                system_prompt = (system_prompt + "\n\n" + ws_context) if system_prompt else ws_context
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             if history:
@@ -318,6 +801,7 @@ class BrainService:
         messages.append({"role": "user", "content": prompt_stripped})
         first_token_received = False
         first_token_latency_ms = 0.0
+        full_assistant_response = ""
 
         try:
             backend_chunk_index = 0
@@ -378,6 +862,7 @@ class BrainService:
                     # event_type == "chunk"
                     chunk = event_data
                     if chunk.text:
+                        full_assistant_response += chunk.text
                         t_chunk_received = time.perf_counter()
                         prov_elapsed_ms = (t_chunk_received - t_start) * 1000.0
                         if not first_token_received:
@@ -416,6 +901,9 @@ class BrainService:
                         await reader_task
                     except Exception:
                         pass
+
+            if full_assistant_response:
+                session_history_manager.append_assistant_message(sess_id, full_assistant_response)
 
             total_duration_ms = (time.perf_counter() - t_start) * 1000.0
             logger.info("[LATENCY][%s] RESPONSE_COMPLETE | total=%.2fms", req_id, total_duration_ms)
